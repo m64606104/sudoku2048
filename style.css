@@ -2426,7 +2426,7 @@ body.electron-mode #dynamic-island {
   position: absolute;
   inset: 0;
   top: 0;
-  z-index: 10;
+  z-index: 25;
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
