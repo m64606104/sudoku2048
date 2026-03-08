@@ -330,6 +330,12 @@
             <input type="number" id="input-bubble-duration" min="2" max="15" step="1" value="5">
           </div>
 
+          <div class="form-group">
+            <label>AI 上下文条数 <span id="context-count-value" style="color:var(--accent);font-weight:600;">25</span></label>
+            <input type="range" id="input-context-count" min="20" max="100" step="5" value="25" class="settings-range">
+            <div class="form-hint">AI 回复时参考的聊天记录条数。越多越连贯，但消耗更多 token</div>
+          </div>
+
           <div class="toggle-group">
             <div class="toggle-label">
               <span class="toggle-title">Private Mode</span>
@@ -448,10 +454,55 @@
     </div>
 
     <div class="chat-input-area">
-      <textarea id="chat-input" placeholder="Say something..." rows="1"></textarea>
-      <button class="chat-send-btn" id="chat-send-btn">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-      </button>
+      <div class="chat-input-row">
+        <button class="chat-extra-btn" id="chat-sticker-btn" aria-label="Stickers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </button>
+        <textarea id="chat-input" placeholder="Say something..." rows="1"></textarea>
+        <button class="chat-extra-btn" id="chat-image-btn" aria-label="Send image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
+        <button class="chat-send-btn" id="chat-send-btn">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+        <input type="file" id="chat-image-file" accept="image/*" hidden>
+      </div>
+      <div class="chat-sticker-panel hidden" id="chat-sticker-panel">
+        <div class="chat-sticker-tabs">
+          <button class="chat-sticker-tab active" data-sticker-tab="text">文字</button>
+          <button class="chat-sticker-tab" data-sticker-tab="image">图片</button>
+        </div>
+        <div class="chat-sticker-grid" id="chat-sticker-grid"></div>
+      </div>
+      <!-- Text sticker create dialog (fullscreen chat) -->
+      <div class="chat-sticker-dialog hidden" id="chat-text-sticker-dialog">
+        <div class="chat-sticker-dialog-body">
+          <label style="font-size:13px;font-weight:600;color:var(--text-primary);">表情包文字</label>
+          <input type="text" id="chat-text-sticker-text" placeholder="例：哈哈哈" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #333;background:var(--bg-glass-light);color:var(--text-primary);font-size:14px;margin:6px 0;">
+          <label style="font-size:13px;font-weight:600;color:var(--text-primary);">含义描述（AI 看到的）</label>
+          <input type="text" id="chat-text-sticker-meaning" placeholder="例：大笑，表示很开心" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #333;background:var(--bg-glass-light);color:var(--text-primary);font-size:14px;margin:6px 0;">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn-secondary btn-sm" id="chat-text-sticker-cancel" style="flex:1;">取消</button>
+            <button class="btn-primary btn-sm" id="chat-text-sticker-save" style="flex:1;">保存</button>
+          </div>
+        </div>
+      </div>
+      <!-- Image sticker create (reuse file input) -->
+      <input type="file" id="chat-sticker-image-file" accept="image/*" hidden>
+      <div class="chat-sticker-dialog hidden" id="chat-image-sticker-dialog">
+        <div class="chat-sticker-dialog-body">
+          <label style="font-size:13px;font-weight:600;color:var(--text-primary);">预览</label>
+          <div id="chat-image-sticker-preview" style="width:80px;height:80px;border-radius:8px;overflow:hidden;background:#1a1a2e;margin:6px 0;display:flex;align-items:center;justify-content:center;">
+            <span style="color:var(--text-muted);font-size:12px;">无</span>
+          </div>
+          <label style="font-size:13px;font-weight:600;color:var(--text-primary);">含义描述（AI 看到的）</label>
+          <input type="text" id="chat-image-sticker-meaning" placeholder="例：一只可爱的猫" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #333;background:var(--bg-glass-light);color:var(--text-primary);font-size:14px;margin:6px 0;">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn-secondary btn-sm" id="chat-image-sticker-cancel" style="flex:1;">取消</button>
+            <button class="btn-primary btn-sm" id="chat-image-sticker-save" style="flex:1;">保存</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -460,7 +511,7 @@
     <!-- Phone Status Bar -->
     <div class="phone-statusbar">
       <span class="phone-time" id="phone-time">12:00</span>
-      <span class="phone-title">Vision Soul</span>
+      <span class="phone-title">数独2048</span>
       <button class="phone-minimize-btn" id="phone-to-island" aria-label="Switch to float window">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>

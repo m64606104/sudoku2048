@@ -239,12 +239,15 @@ const Store = (() => {
 
   // ========== 设置项 ==========
   function getSettings() {
-    return load('settings') || {
+    const defaults = {
       captureInterval: 20,
       privacyMode: false,
       dynamicFrequency: true,
-      bubbleDuration: 5
+      bubbleDuration: 5,
+      contextCount: 25
     };
+    const stored = load('settings');
+    return stored ? { ...defaults, ...stored } : defaults;
   }
 
   function saveSettings(settings) {

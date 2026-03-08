@@ -10,6 +10,9 @@ const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
+// 固定 userData 路径，防止改名后数据丢失
+app.setPath('userData', path.join(app.getPath('appData'), 'sudoku-2048'));
+
 let mainWindow = null;
 let tray = null;
 

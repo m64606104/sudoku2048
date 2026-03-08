@@ -762,6 +762,15 @@ const UI = (() => {
       }
     });
 
+    // Context count slider real-time display
+    const ctxSlider = document.getElementById('input-context-count');
+    if (ctxSlider) {
+      ctxSlider.addEventListener('input', () => {
+        const val = document.getElementById('context-count-value');
+        if (val) val.textContent = ctxSlider.value;
+      });
+    }
+
     // Check update in settings
     document.getElementById('settings-check-update-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('settings-update-status');
@@ -841,7 +850,8 @@ const UI = (() => {
       captureInterval: parseInt(document.getElementById('input-interval').value) || 20,
       privacyMode: document.getElementById('input-privacy').checked,
       dynamicFrequency: document.getElementById('input-dynamic-freq').checked,
-      bubbleDuration: parseInt(document.getElementById('input-bubble-duration').value) || 5
+      bubbleDuration: parseInt(document.getElementById('input-bubble-duration').value) || 5,
+      contextCount: parseInt(document.getElementById('input-context-count').value) || 25
     });
     // Save profile
     const avatarEl = document.getElementById('settings-profile-avatar');
@@ -886,10 +896,13 @@ const UI = (() => {
     const p = document.getElementById('input-privacy');
     const d = document.getElementById('input-dynamic-freq');
     const b = document.getElementById('input-bubble-duration');
+    const ctx = document.getElementById('input-context-count');
+    const ctxVal = document.getElementById('context-count-value');
     if (i) i.value = s.captureInterval || 20;
     if (p) p.checked = s.privacyMode || false;
     if (d) d.checked = s.dynamicFrequency !== false;
     if (b) b.value = s.bubbleDuration || 5;
+    if (ctx) { ctx.value = s.contextCount || 25; if (ctxVal) ctxVal.textContent = ctx.value; }
   }
 
   function showSaveToast() {
@@ -1143,6 +1156,164 @@ const UI = (() => {
 
     const sendBtn = document.getElementById('chat-send-btn');
     if (sendBtn) sendBtn.addEventListener('click', sendChatMessage);
+
+    // Sticker button in fullscreen chat
+    const stickerBtn = document.getElementById('chat-sticker-btn');
+    if (stickerBtn) stickerBtn.addEventListener('click', toggleChatStickerPanel);
+
+    // Sticker tab switching
+    document.querySelectorAll('.chat-sticker-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.chat-sticker-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        chatStickerActiveTab = tab.dataset.stickerTab;
+        renderChatStickerGrid();
+      });
+    });
+
+    // Text sticker create dialog
+    document.getElementById('chat-text-sticker-cancel').addEventListener('click', () => {
+      document.getElementById('chat-text-sticker-dialog').classList.add('hidden');
+    });
+    document.getElementById('chat-text-sticker-save').addEventListener('click', () => {
+      const text = document.getElementById('chat-text-sticker-text').value.trim();
+      const meaning = document.getElementById('chat-text-sticker-meaning').value.trim();
+      if (!text || !meaning) return;
+      Store.addSticker({ type: 'text', text, meaning });
+      document.getElementById('chat-text-sticker-dialog').classList.add('hidden');
+      renderChatStickerGrid();
+    });
+
+    // Image sticker create dialog
+    document.getElementById('chat-image-sticker-cancel').addEventListener('click', () => {
+      document.getElementById('chat-image-sticker-dialog').classList.add('hidden');
+      chatPendingStickerBase64 = '';
+    });
+    document.getElementById('chat-image-sticker-save').addEventListener('click', () => {
+      const meaning = document.getElementById('chat-image-sticker-meaning').value.trim();
+      if (!chatPendingStickerBase64 || !meaning) return;
+      Store.addSticker({ type: 'image', image: chatPendingStickerBase64, meaning });
+      document.getElementById('chat-image-sticker-dialog').classList.add('hidden');
+      chatPendingStickerBase64 = '';
+      renderChatStickerGrid();
+    });
+    document.getElementById('chat-sticker-image-file').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = '';
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const size = Math.min(img.width, img.height, 200);
+          canvas.width = size; canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, size, size);
+          chatPendingStickerBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          const preview = document.getElementById('chat-image-sticker-preview');
+          preview.innerHTML = `<img src="${chatPendingStickerBase64}" style="width:100%;height:100%;object-fit:cover;">`;
+          document.getElementById('chat-image-sticker-dialog').classList.remove('hidden');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Image button in fullscreen chat (send image message)
+    const imageBtn = document.getElementById('chat-image-btn');
+    if (imageBtn) imageBtn.addEventListener('click', () => {
+      document.getElementById('chat-image-file').click();
+    });
+    const imageFile = document.getElementById('chat-image-file');
+    if (imageFile) imageFile.addEventListener('change', handleChatImageUpload);
+  }
+
+  let chatStickerActiveTab = 'text';
+  let chatPendingStickerBase64 = '';
+
+  function toggleChatStickerPanel() {
+    const panel = document.getElementById('chat-sticker-panel');
+    const isHidden = panel.classList.contains('hidden');
+    // Hide dialogs when toggling
+    document.getElementById('chat-text-sticker-dialog').classList.add('hidden');
+    document.getElementById('chat-image-sticker-dialog').classList.add('hidden');
+    if (isHidden) {
+      renderChatStickerGrid();
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
+  }
+
+  function renderChatStickerGrid() {
+    const grid = document.getElementById('chat-sticker-grid');
+    grid.innerHTML = '';
+    const char = Store.getActiveCharacter();
+    if (!char) return;
+    const allStickers = Store.getStickers(char.id) || [];
+    const stickers = allStickers.filter(s => s.type === chatStickerActiveTab);
+
+    // Add "new" button first
+    const addItem = document.createElement('div');
+    addItem.className = 'sticker-item sticker-add';
+    addItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;color:var(--text-muted);"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    addItem.addEventListener('click', () => {
+      if (chatStickerActiveTab === 'text') {
+        document.getElementById('chat-text-sticker-text').value = '';
+        document.getElementById('chat-text-sticker-meaning').value = '';
+        document.getElementById('chat-text-sticker-dialog').classList.remove('hidden');
+      } else {
+        document.getElementById('chat-sticker-image-file').click();
+      }
+    });
+    grid.appendChild(addItem);
+
+    stickers.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'sticker-item';
+      if (s.type === 'image') {
+        item.innerHTML = `<img src="${s.image || s.data}" alt="sticker">`;
+      } else {
+        item.innerHTML = `<div class="text-sticker">${escapeHtml(s.text)}</div>`;
+      }
+      item.addEventListener('click', () => {
+        sendChatSticker(s);
+        document.getElementById('chat-sticker-panel').classList.add('hidden');
+      });
+      grid.appendChild(item);
+    });
+  }
+
+  function sendChatSticker(sticker) {
+    if (!Store.getActiveCharacter()) return;
+    if (sticker.type === 'image') {
+      addMessageToChat('user', `[sticker:${sticker.data}]`);
+    } else {
+      addMessageToChat('user', `[textsticker:${sticker.text}]`);
+    }
+    // 告诉 AI 用户发了表情
+    const desc = sticker.type === 'image'
+      ? (sticker.meaning || '发了一个表情包')
+      : sticker.text;
+    chatMsgBuffer.push(`[用户发送了表情: ${desc}]`);
+    if (chatMsgBufferTimer) clearTimeout(chatMsgBufferTimer);
+    chatMsgBufferTimer = setTimeout(() => flushChatMsgBuffer(), MSG_BUFFER_DELAY);
+  }
+
+  function handleChatImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      addMessageToChat('user', '[图片]');
+      // 可以把 base64 存到聊天历史，或者直接作为描述发给 AI
+      chatMsgBuffer.push('[用户发送了一张图片]');
+      if (chatMsgBufferTimer) clearTimeout(chatMsgBufferTimer);
+      chatMsgBufferTimer = setTimeout(() => flushChatMsgBuffer(), MSG_BUFFER_DELAY);
+    };
+    reader.readAsDataURL(file);
   }
 
   // 全屏聊天的消息缓冲
@@ -1258,6 +1429,33 @@ const UI = (() => {
     history.forEach(msg => {
       const div = document.createElement('div');
       div.className = `chat-msg ${msg.role}`;
+
+      // Image sticker: [sticker:base64...]
+      if (msg.content && msg.content.startsWith('[sticker:')) {
+        const stickerImg = msg.content.match(/\[sticker:(.*?)\]/s)?.[1];
+        if (stickerImg) {
+          div.innerHTML = `
+            <div class="chat-msg-sticker"><img src="${stickerImg}" alt="sticker"></div>
+            <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>
+          `;
+          container.appendChild(div);
+          return;
+        }
+      }
+
+      // Text sticker: [textsticker:文字内容]
+      if (msg.content && msg.content.startsWith('[textsticker:')) {
+        const textContent = msg.content.match(/\[textsticker:(.*?)\]/)?.[1];
+        if (textContent) {
+          div.innerHTML = `
+            <div class="chat-msg-text-sticker">${escapeHtml(textContent)}</div>
+            <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>
+          `;
+          container.appendChild(div);
+          return;
+        }
+      }
+
       div.innerHTML = `
         <div class="chat-msg-content">${escapeHtml(msg.content)}</div>
         <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>

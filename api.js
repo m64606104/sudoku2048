@@ -124,8 +124,12 @@ const API = (() => {
 - 不要复述屏幕内容，不要机械描述你看到了什么。
 - 想象你坐在朋友旁边，偶尔瞄一眼他屏幕，然后随口说一句。
 - 如果没什么好说的，就回复：[SILENT]
-- 不要每次都评论。不要重复之前说过的话题。
-- 大部分时候你应该回复 [SILENT]，只有真的有感触的时候才说话。`
+- 不要每次都评论。大部分时候你应该回复 [SILENT]，只有真的有感触的时候才说话。
+
+⚠️ 重要 - 关于重复：
+- 仔细看上面的聊天记录和你之前的观察记录。你已经说过的话题、已经聊过的内容，绝对不要再提。
+- 如果屏幕内容跟之前差不多，直接 [SILENT]，不要换个说法重复同样的评论。
+- 宁可沉默也不要重复。每次开口必须是全新的角度或全新的话题。`
       );
     } else {
       parts.push(
@@ -145,7 +149,7 @@ const API = (() => {
   // ========== 帧历史摘要：记录 AI 对每帧的简要理解 ==========
   function addFrameSummary(text) {
     if (!text || text === '[SILENT]') return;
-    frameSummaries.push({ time: Date.now(), text: text.substring(0, 80) });
+    frameSummaries.push({ time: Date.now(), text: text.substring(0, 150) });
     while (frameSummaries.length > MAX_FRAME_SUMMARIES) {
       frameSummaries.shift();
     }
@@ -156,7 +160,15 @@ const API = (() => {
     const lines = frameSummaries.map((f, i) =>
       `[${i + 1}] ${f.text}`
     );
-    return 'Your recent observations (DO NOT repeat these):\n' + lines.join('\n');
+    // 提取已聊过的话题关键词
+    const allText = frameSummaries.map(f => f.text).join(' ');
+    const topics = [...new Set(allText.match(/[\u4e00-\u9fff]{2,6}/g) || [])].slice(0, 15);
+    let ctx = '⚠️ 以下是你之前已经说过的话，绝对不要重复相同的话题或类似的表达：\n' + lines.join('\n');
+    if (topics.length > 0) {
+      ctx += '\n已聊过的关键词（禁止再提）：' + topics.join('、');
+    }
+    ctx += '\n请换一个全新的角度或话题来评论，或者直接回复 [SILENT]。';
+    return ctx;
   }
 
   // ========== 获取统一聊天上下文 ==========
@@ -188,8 +200,10 @@ const API = (() => {
 
     const messages = [{ role: 'system', content: systemPrompt }];
 
-    // 加入最近聊天上下文（截屏评论和用户聊天混合）
-    const recentCtx = getRecentContext(6);
+    // 加入最近聊天上下文（条数取用户设置，默认25）
+    const settings = Store.getSettings();
+    const ctxCount = settings.contextCount || 25;
+    const recentCtx = getRecentContext(ctxCount);
     messages.push(...recentCtx);
 
     // 构造当前帧的提示
@@ -233,8 +247,10 @@ const API = (() => {
 
     const messages = [{ role: 'system', content: systemPrompt }];
 
-    // 统一上下文：最近 8 条（排除最后一条，因为下面会手动构造当前用户消息）
-    const recentCtx = getRecentContext(8, true);
+    // 统一上下文：条数取用户设置（排除最后一条，因为下面会手动构造当前用户消息）
+    const settings = Store.getSettings();
+    const ctxCount = settings.contextCount || 25;
+    const recentCtx = getRecentContext(ctxCount, true);
     messages.push(...recentCtx);
 
     // 帧历史提示（如果有）
