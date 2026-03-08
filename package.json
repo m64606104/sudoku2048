@@ -1,0 +1,46 @@
+{
+  "name": "sudoku-2048",
+  "version": "1.0.0",
+  "description": "A desktop companion that lives on your screen",
+  "main": "main.js",
+  "author": "VisionSoul",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.sudoku2048.app",
+    "productName": "数独2048",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "store.js",
+      "vision.js",
+      "api.js",
+      "ui.js"
+    ],
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "async-exit-hook": "^2.0.1"
+  }
+}

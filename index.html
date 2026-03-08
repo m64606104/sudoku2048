@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0c0c14">
+  <title>Vision Soul</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== Background (shown after onboarding) ========== -->
+  <div class="welcome-bg" id="main-bg">
+    <span class="brand">Vision Soul</span>
+    <span class="hint">tap the island above to begin</span>
+  </div>
+
+  <!-- ========== Onboarding Wizard (first time only) ========== -->
+  <div id="onboarding" class="hidden">
+    <div class="onboarding-container">
+
+      <!-- Step 1: Welcome -->
+      <div class="onboarding-step active" data-step="1">
+        <div class="onboarding-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+          </svg>
+        </div>
+        <h1>Welcome to Vision Soul</h1>
+        <p class="onboarding-desc">A companion that lives on your screen, sees what you see, and shares their thoughts with you.</p>
+        <p class="onboarding-sub">Let's set things up — it only takes a minute.</p>
+        <button class="btn-primary onboarding-next" data-goto="2">Get Started</button>
+      </div>
+
+      <!-- Step 2: API Config -->
+      <div class="onboarding-step" data-step="2">
+        <div class="onboarding-icon small">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8l-2 4h12z"/>
+          </svg>
+        </div>
+        <h2>Build the Bridge</h2>
+        <p class="onboarding-desc">To bring someone to your screen, we need to set up a connection channel. Enter the details below.</p>
+
+        <div class="onboarding-form">
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="ob-api-key" placeholder="sk-...">
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="ob-base-url" placeholder="e.g. https://api.openai.com/v1">
+          </div>
+          <div class="form-group">
+            <label>Model</label>
+            <div class="model-fetch-row">
+              <button class="btn-fetch" id="ob-fetch-models">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Fetch Models
+              </button>
+            </div>
+            <select id="ob-model-name" disabled>
+              <option value="">Fill in Key & URL first, then fetch</option>
+            </select>
+            <div class="form-hint">Choose a model that supports image input</div>
+          </div>
+        </div>
+
+        <div class="onboarding-actions">
+          <button class="btn-ghost onboarding-back" data-goto="1">Back</button>
+          <button class="btn-primary onboarding-next" data-goto="3">Next</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Create First Character -->
+      <div class="onboarding-step" data-step="3">
+        <div class="onboarding-icon small">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+          </svg>
+        </div>
+        <h2>Create Your Companion</h2>
+        <p class="onboarding-desc">Give them a name and personality — they'll react to your screen in character.</p>
+
+        <div class="onboarding-form">
+          <div class="avatar-upload-area compact">
+            <div id="ob-avatar-preview">
+              <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>
+              </svg>
+            </div>
+            <div class="avatar-upload-info">
+              <button class="btn-upload" id="ob-avatar-btn">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload Avatar
+              </button>
+              <span class="upload-hint">Optional</span>
+              <input type="file" id="ob-avatar-file" accept="image/*" hidden>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="ob-char-name" placeholder="e.g. Aria, Kuro, Mochi..." maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>Personality</label>
+            <textarea id="ob-char-personality" placeholder="e.g. witty, sarcastic, secretly caring, night owl" maxlength="200"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Background (optional)</label>
+            <textarea id="ob-char-background" placeholder="Their story — where they come from, what they like..." maxlength="500"></textarea>
+          </div>
+        </div>
+
+        <div class="onboarding-actions">
+          <button class="btn-ghost onboarding-back" data-goto="2">Back</button>
+          <button class="btn-primary" id="ob-finish">Done — Let's Go</button>
+        </div>
+      </div>
+
+      <!-- Step indicator -->
+      <div class="onboarding-dots">
+        <span class="dot active" data-dot="1"></span>
+        <span class="dot" data-dot="2"></span>
+        <span class="dot" data-dot="3"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Dynamic Island ========== -->
+  <div id="dynamic-island">
+    <button id="island-avatar-btn" aria-label="Menu">
+      <div id="island-avatar">
+        <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>
+        </svg>
+      </div>
+    </button>
+
+    <div id="island-expanded" class="hidden">
+      <!-- Contacts -->
+      <button class="island-action-btn" id="btn-contacts" aria-label="Contacts">
+        <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      </button>
+      <!-- Chat -->
+      <button class="island-action-btn" id="btn-fullscreen" aria-label="Chat">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <!-- Settings -->
+      <button class="island-action-btn" id="btn-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <!-- Vision toggle -->
+      <button class="island-action-btn" id="btn-vision-toggle" aria-label="Vision">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <!-- Phone mode -->
+      <button class="island-action-btn" id="btn-phone-mode" aria-label="Phone mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Bubble and Reply moved outside island so they won't be clipped -->
+  <div id="island-bubble" class="hidden">
+    <span id="bubble-text"></span>
+    <button id="bubble-reply-btn" aria-label="Reply">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+      </svg>
+    </button>
+  </div>
+
+  <div id="island-reply" class="hidden">
+    <input type="text" id="island-reply-input" placeholder="Say something..." autocomplete="off">
+    <button id="island-reply-send" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+    <button id="island-reply-close" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ========== Contacts (Character List) ========== -->
+  <div id="contacts-overlay" class="hidden">
+    <div class="contacts-container">
+      <div class="settings-handle"></div>
+      <div class="contacts-header">
+        <h2>Companions</h2>
+        <div class="contacts-header-actions">
+          <button class="icon-btn" id="contacts-add-btn" aria-label="Add companion">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="settings-close-btn" id="contacts-close">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="contacts-list" id="contacts-list">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Character Edit Modal ========== -->
+  <div id="char-edit-overlay" class="hidden">
+    <div class="settings-container">
+      <div class="settings-handle"></div>
+      <div class="settings-header">
+        <h2 id="char-edit-title">New Companion</h2>
+        <button class="settings-close-btn" id="char-edit-close">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-panel active">
+          <div class="avatar-upload-area">
+            <div id="char-edit-avatar-preview">
+              <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>
+              </svg>
+            </div>
+            <div class="avatar-upload-info">
+              <button class="btn-upload" id="char-edit-avatar-btn">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload Avatar
+              </button>
+              <span class="upload-hint">JPG / PNG, max 2MB</span>
+              <input type="file" id="char-edit-file-input" accept="image/*" hidden>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="char-edit-name" placeholder="Give your companion a name" maxlength="20">
+          </div>
+
+          <div class="form-group">
+            <label>How they refer to themselves</label>
+            <input type="text" id="char-edit-nickname" placeholder="e.g. their own nickname" maxlength="20">
+          </div>
+
+          <div class="form-group">
+            <label>Background Story</label>
+            <textarea id="char-edit-background" placeholder="Who are they? Where do they come from? What's their story?&#10;&#10;e.g. A transfer student from another dimension who accidentally ended up living inside your phone..." maxlength="500"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Personality</label>
+            <textarea id="char-edit-personality" placeholder="Describe their personality with keywords&#10;&#10;e.g. witty, sarcastic, secretly caring, bookworm, night owl" maxlength="200"></textarea>
+            <div class="form-hint">These traits shape how they talk and react to what they see</div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <button class="btn-ghost" id="char-edit-cancel">Cancel</button>
+        <button class="btn-primary" id="char-edit-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Settings (API + General only) ========== -->
+  <div id="settings-overlay" class="hidden">
+    <div class="settings-container">
+      <div class="settings-handle"></div>
+
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button class="settings-close-btn" id="settings-close">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="settings-tab active" data-tab="api">API</button>
+        <button class="settings-tab" data-tab="general">General</button>
+        <button class="settings-tab" data-tab="profile">个人</button>
+        <button class="settings-tab" data-tab="data">数据</button>
+      </div>
+
+      <div class="settings-body">
+        <!-- API -->
+        <div class="settings-panel active" id="panel-api">
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="input-api-key" placeholder="Your API key">
+            <div class="form-hint">The key to open the connection channel</div>
+          </div>
+
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="input-base-url" placeholder="e.g. https://api.openai.com/v1">
+            <div class="form-hint">The base endpoint for your API provider</div>
+          </div>
+
+          <div class="form-group">
+            <label>Model</label>
+            <div class="model-fetch-row">
+              <button class="btn-fetch" id="settings-fetch-models">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Fetch Models
+              </button>
+            </div>
+            <select id="input-model-name" disabled>
+              <option value="">Fill in Key & URL first, then fetch</option>
+            </select>
+            <div class="form-hint">Choose a model that supports image input</div>
+          </div>
+        </div>
+
+        <!-- General -->
+        <div class="settings-panel" id="panel-general">
+          <div class="form-group">
+            <label>Capture interval (seconds)</label>
+            <input type="number" id="input-interval" min="10" max="120" step="5" value="20">
+            <div class="form-hint">How often a screen frame is sampled. 15–30s recommended</div>
+          </div>
+
+          <div class="form-group">
+            <label>Bubble display duration (seconds)</label>
+            <input type="number" id="input-bubble-duration" min="2" max="15" step="1" value="5">
+          </div>
+
+          <div class="toggle-group">
+            <div class="toggle-label">
+              <span class="toggle-title">Private Mode</span>
+              <span class="toggle-desc">Pause all screen capture — your companion looks away</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="input-privacy">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-group">
+            <div class="toggle-label">
+              <span class="toggle-title">Smart Frequency</span>
+              <span class="toggle-desc">Skip capture when the screen hasn't changed, saving API cost</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="input-dynamic-freq" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Vision Preview -->
+          <div class="vision-preview-section">
+            <label>Vision Preview</label>
+            <div class="vision-preview-box" id="vision-preview-box">
+              <div class="vision-preview-placeholder" id="vision-preview-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Vision is off</span>
+              </div>
+              <img id="vision-preview-img" alt="Screen preview" hidden>
+            </div>
+            <div class="form-hint">Shows what your companion currently sees</div>
+          </div>
+        </div>
+
+        <!-- Profile -->
+        <div class="settings-panel" id="panel-profile">
+          <div class="form-group">
+            <label>头像</label>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+              <div id="settings-profile-avatar" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#1a1a2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;background-size:cover;">
+                <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:28px;height:28px;"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+              </div>
+              <button class="btn-secondary btn-sm" id="settings-profile-avatar-btn">更换头像</button>
+              <input type="file" id="settings-profile-avatar-file" accept="image/*" hidden>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>昵称</label>
+            <input type="text" id="settings-profile-nickname" placeholder="输入你的昵称">
+          </div>
+          <div class="form-group">
+            <label>身份设定</label>
+            <textarea id="settings-profile-identity" rows="4" placeholder="描述你自己，AI会根据这些信息和你互动。&#10;例如：我是一个20岁的女大学生，喜欢追星和打游戏。" style="resize:vertical;"></textarea>
+            <div class="form-hint">所有 AI 角色都能看到这些信息，会据此和你自然互动</div>
+          </div>
+        </div>
+
+        <!-- Data -->
+        <div class="settings-panel" id="panel-data">
+          <div class="form-group">
+            <label>导出全部数据</label>
+            <div class="form-hint">备份所有角色、聊天记录、表情包和设置</div>
+            <button class="btn-primary btn-sm" id="settings-export-btn" style="margin-top:8px;">导出数据</button>
+          </div>
+          <div class="form-group">
+            <label>导入数据</label>
+            <div class="form-hint">从备份文件恢复数据（会覆盖当前数据）</div>
+            <button class="btn-secondary btn-sm" id="settings-import-btn" style="margin-top:8px;">选择文件导入</button>
+            <input type="file" id="settings-import-file" accept=".json" hidden>
+          </div>
+          <hr style="border:none;border-top:1px solid #333;margin:12px 0;">
+          <div class="form-group">
+            <label>应用更新</label>
+            <div class="form-hint">从服务器获取最新版本，数据不会丢失</div>
+            <button class="btn-primary btn-sm" id="settings-check-update-btn" style="margin-top:8px;">检查更新</button>
+            <div id="settings-update-status" style="margin-top:8px;font-size:12px;color:var(--text-muted);"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="btn-ghost" id="settings-close-2" onclick="document.getElementById('settings-close').click()">Cancel</button>
+        <button class="btn-primary" id="settings-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Fullscreen Chat ========== -->
+  <div id="fullscreen-app" class="hidden">
+    <div class="fullscreen-header">
+      <button class="fullscreen-back-btn" id="fullscreen-back">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="fullscreen-info">
+        <h3 id="fullscreen-char-name">Companion</h3>
+        <span class="status-line"><span class="status-dot"></span> here with you</span>
+      </div>
+      <div class="fullscreen-avatar" id="fullscreen-avatar">
+        <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="chat-area" id="chat-messages">
+      <div class="chat-empty">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <p>No conversations yet.<br>Once vision is on, your companion will start sharing their thoughts.</p>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chat-input" placeholder="Say something..." rows="1"></textarea>
+      <button class="chat-send-btn" id="chat-send-btn">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== Phone Mode ========== -->
+  <div id="phone-mode" class="hidden">
+    <!-- Phone Status Bar -->
+    <div class="phone-statusbar">
+      <span class="phone-time" id="phone-time">12:00</span>
+      <span class="phone-title">Vision Soul</span>
+      <button class="phone-minimize-btn" id="phone-to-island" aria-label="Switch to float window">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Tab Pages Container -->
+    <div class="phone-pages">
+
+      <!-- === Messages Tab === -->
+      <div class="phone-page active" id="phone-page-messages">
+        <div class="phone-page-header">
+          <h2>消息</h2>
+        </div>
+        <div class="phone-chat-list" id="phone-chat-list">
+          <!-- Rendered by JS: list of character conversations -->
+        </div>
+      </div>
+
+      <!-- === Discover Tab (placeholder) === -->
+      <div class="phone-page" id="phone-page-discover">
+        <div class="phone-page-header">
+          <h2>发现</h2>
+        </div>
+        <div class="phone-empty-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+          </svg>
+          <p>更多功能即将上线</p>
+        </div>
+      </div>
+
+      <!-- === Profile Tab === -->
+      <div class="phone-page" id="phone-page-profile">
+        <div class="phone-page-header">
+          <h2>我的</h2>
+        </div>
+        <div class="phone-profile-content">
+          <!-- Profile card -->
+          <div class="phone-profile-card" id="phone-profile-card">
+            <div class="phone-profile-avatar" id="phone-profile-avatar">
+              <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+            </div>
+            <div class="phone-profile-info">
+              <span class="phone-profile-name" id="phone-profile-name">未设置角色</span>
+              <span class="phone-profile-status">在线</span>
+            </div>
+          </div>
+
+          <!-- Menu items -->
+          <div class="phone-menu-section">
+            <div class="phone-menu-item" id="phone-menu-user-profile">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+              <span>个人设置</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-companions">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              <span>角色管理</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-stickers">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              <span>表情包管理</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-chat-settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="12" cy="10" r="1"/><circle cx="8" cy="10" r="1"/><circle cx="16" cy="10" r="1"/></svg>
+              <span>聊天设置</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-vision">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span>屏幕感知</span>
+              <span class="phone-menu-badge" id="phone-vision-badge">关</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </div>
+
+          <div class="phone-menu-section">
+            <div class="phone-menu-item" id="phone-menu-api">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3h-8l-2 4h12z"/></svg>
+              <span>API 设置</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-general">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
+              <span>通用设置</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </div>
+
+          <div class="phone-menu-section">
+            <div class="phone-menu-item" id="phone-menu-export">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>导出全部数据</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <div class="phone-menu-item" id="phone-menu-import">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>导入数据</span>
+              <svg class="menu-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+            <input type="file" id="phone-import-file" accept=".json" hidden>
+          </div>
+
+          <div class="phone-menu-section">
+            <div class="phone-menu-item danger" id="phone-menu-quit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>退出应用</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone Chat Room (pushed on top of tab pages) -->
+    <div class="phone-chatroom hidden" id="phone-chatroom">
+      <div class="phone-chatroom-header">
+        <button class="phone-back-btn" id="phone-chatroom-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="phone-chatroom-info">
+          <span class="phone-chatroom-name" id="phone-chatroom-name">Companion</span>
+          <span class="phone-chatroom-status">在线</span>
+        </div>
+        <div class="phone-chatroom-avatar" id="phone-chatroom-avatar">
+          <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+        </div>
+      </div>
+
+      <div class="phone-chat-messages" id="phone-chat-messages">
+        <!-- Rendered by JS -->
+      </div>
+
+      <div class="phone-chat-inputbar">
+        <button class="phone-input-btn" id="phone-sticker-btn" aria-label="Stickers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </button>
+        <input type="text" class="phone-chat-input" id="phone-chat-input" placeholder="输入消息..." autocomplete="off">
+        <button class="phone-input-btn" id="phone-image-btn" aria-label="Send image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
+        <button class="phone-send-btn" id="phone-send-btn" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+        <input type="file" id="phone-image-file" accept="image/*" hidden>
+      </div>
+
+      <!-- Sticker Panel (slides up from bottom) -->
+      <div class="phone-sticker-panel hidden" id="phone-sticker-panel">
+        <div class="phone-sticker-grid" id="phone-sticker-grid">
+          <!-- Rendered by JS -->
+        </div>
+        <button class="phone-sticker-add-btn" id="phone-sticker-add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>添加表情包</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sticker Manager (add/edit stickers) -->
+    <div class="phone-subpage hidden" id="phone-sticker-manager">
+      <div class="phone-subpage-header">
+        <button class="phone-back-btn" id="phone-sticker-manager-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span>表情包管理</span>
+      </div>
+      <div class="phone-sticker-manager-body">
+        <div class="phone-sticker-list" id="phone-sticker-list">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="phone-sticker-upload-area">
+          <button class="btn-primary" id="phone-sticker-upload-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            上传图片表情包
+          </button>
+          <button class="btn-secondary" id="phone-text-sticker-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/></svg>
+            添加文字表情包
+          </button>
+          <input type="file" id="phone-sticker-file" accept="image/*" hidden>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticker Add Dialog (image) -->
+    <div class="phone-dialog-overlay hidden" id="phone-sticker-dialog">
+      <div class="phone-dialog">
+        <h3>添加图片表情包</h3>
+        <div class="phone-sticker-preview" id="phone-sticker-preview"></div>
+        <div class="form-group">
+          <label>这个表情包的含义</label>
+          <input type="text" id="phone-sticker-meaning" placeholder="例：开心、无语、生气、哈哈大笑..." maxlength="50">
+          <div class="form-hint">AI 会根据这个描述来理解和使用这个表情包</div>
+        </div>
+        <div class="phone-dialog-actions">
+          <button class="btn-ghost" id="phone-sticker-dialog-cancel">取消</button>
+          <button class="btn-primary" id="phone-sticker-dialog-save">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Sticker Add Dialog -->
+    <div class="phone-dialog-overlay hidden" id="phone-text-sticker-dialog">
+      <div class="phone-dialog">
+        <h3>添加文字表情包</h3>
+        <div class="form-group">
+          <label>表情包文字</label>
+          <input type="text" id="phone-text-sticker-text" placeholder="例：[摸摸头]、啊对对对、6666..." maxlength="30">
+          <div class="form-hint">发送时会以表情包样式展示</div>
+        </div>
+        <div class="form-group">
+          <label>含义 / 备注</label>
+          <input type="text" id="phone-text-sticker-meaning" placeholder="例：安慰对方、表示赞同..." maxlength="50">
+          <div class="form-hint">AI 会根据含义来理解和主动使用这个表情包</div>
+        </div>
+        <div class="phone-dialog-actions">
+          <button class="btn-ghost" id="phone-text-sticker-dialog-cancel">取消</button>
+          <button class="btn-primary" id="phone-text-sticker-dialog-save">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Profile Settings Subpage -->
+    <div class="phone-subpage hidden" id="phone-user-profile">
+      <div class="phone-subpage-header">
+        <button class="phone-back-btn" id="phone-user-profile-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span>个人设置</span>
+      </div>
+      <div class="phone-user-profile-body" style="padding: 16px;">
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">头像</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div class="phone-profile-avatar" id="user-profile-avatar-preview" style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:#1a1a2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg class="default-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+            </div>
+            <button class="btn-secondary btn-sm" id="user-profile-avatar-btn">更换头像</button>
+            <input type="file" id="user-profile-avatar-file" accept="image/*" hidden>
+          </div>
+        </div>
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">昵称</div>
+          <input type="text" id="user-profile-nickname" class="settings-input" placeholder="输入你的昵称" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#e0e7ff;font-size:14px;margin-bottom:12px;">
+        </div>
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">身份设定</div>
+          <textarea id="user-profile-identity" class="settings-textarea" placeholder="描述你自己，AI会根据这些信息和你互动。&#10;例如：我是一个20岁的女大学生，喜欢追星和打游戏。" style="width:100%;min-height:100px;padding:10px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#e0e7ff;font-size:14px;resize:vertical;font-family:inherit;margin-bottom:16px;"></textarea>
+        </div>
+        <button class="btn-primary" id="user-profile-save" style="width:100%;padding:12px;border-radius:10px;font-size:15px;">保存</button>
+      </div>
+    </div>
+
+    <!-- Chat Settings Subpage -->
+    <div class="phone-subpage hidden" id="phone-chat-settings">
+      <div class="phone-subpage-header">
+        <button class="phone-back-btn" id="phone-chat-settings-back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span>聊天设置</span>
+      </div>
+      <div class="phone-chat-settings-body">
+        <!-- Character selector -->
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">选择角色</div>
+          <div class="phone-char-selector" id="phone-chat-settings-chars">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Selected character sticker management -->
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">
+            <span id="phone-cs-char-name">--</span> 的表情包库
+          </div>
+          <div class="phone-cs-sticker-list" id="phone-cs-sticker-list">
+            <!-- Rendered by JS -->
+          </div>
+          <div class="phone-sticker-upload-area">
+            <button class="btn-primary btn-sm" id="phone-cs-upload-image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              图片表情
+            </button>
+            <button class="btn-secondary btn-sm" id="phone-cs-add-text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/></svg>
+              文字表情
+            </button>
+            <input type="file" id="phone-cs-file" accept="image/*" hidden>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Tab Bar -->
+    <div class="phone-tabbar">
+      <button class="phone-tab active" data-tab="messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>消息</span>
+      </button>
+      <button class="phone-tab" data-tab="discover">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>发现</span>
+      </button>
+      <button class="phone-tab" data-tab="profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>我的</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== Toast ========== -->
+  <div id="save-toast">
+    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    Saved
+  </div>
+
+  <script src="store.js"></script>
+  <script src="vision.js"></script>
+  <script src="api.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    // PWA Service Worker 注册（仅浏览器环境）
+    if ('serviceWorker' in navigator && !(window.electronAPI && window.electronAPI.isElectron)) {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>

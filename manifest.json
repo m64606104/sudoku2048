@@ -1,0 +1,22 @@
+{
+  "name": "Vision Soul",
+  "short_name": "VisionSoul",
+  "description": "A desktop companion that lives on your screen",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0c0c14",
+  "theme_color": "#0c0c14",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

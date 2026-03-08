@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html><head><title>Generate Icon</title></head>
+<body style="background:#222;color:#fff;font-family:system-ui;display:flex;flex-direction:column;align-items:center;padding:40px;">
+<h2>Vision Soul Icon Generator</h2>
+<canvas id="c" width="512" height="512"></canvas>
+<br>
+<a id="dl" download="icon.png" style="color:#7c6df5;font-size:18px;">Right-click canvas → Save Image, or click here after generation</a>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const W = 512;
+
+// Background
+const bg = ctx.createLinearGradient(0,0,W,W);
+bg.addColorStop(0,'#1a1a2e');
+bg.addColorStop(1,'#0c0c14');
+ctx.beginPath();
+ctx.roundRect(0,0,W,W,110);
+ctx.fillStyle = bg;
+ctx.fill();
+
+// Eye glow
+const cx2=W/2, cy2=W/2-20;
+ctx.save();
+ctx.translate(cx2, cy2);
+
+// Outer glow
+ctx.shadowColor = '#7c6df5';
+ctx.shadowBlur = 40;
+
+// Eye shape
+ctx.beginPath();
+ctx.ellipse(0,0,140,80,0,0,Math.PI*2);
+const glow = ctx.createLinearGradient(-140,0,140,0);
+glow.addColorStop(0,'#7c6df5');
+glow.addColorStop(1,'#a78bfa');
+ctx.strokeStyle = glow;
+ctx.lineWidth = 10;
+ctx.stroke();
+
+// Iris
+ctx.shadowBlur = 30;
+ctx.beginPath();
+ctx.arc(0,0,50,0,Math.PI*2);
+const iris = ctx.createRadialGradient(0,0,10,0,0,50);
+iris.addColorStop(0,'#a78bfa');
+iris.addColorStop(1,'#7c6df5');
+ctx.fillStyle = iris;
+ctx.fill();
+
+// Pupil
+ctx.shadowBlur = 0;
+ctx.beginPath();
+ctx.arc(0,0,22,0,Math.PI*2);
+ctx.fillStyle = '#0c0c14';
+ctx.fill();
+
+// Highlights
+ctx.beginPath();
+ctx.arc(-12,-14,9,0,Math.PI*2);
+ctx.fillStyle = 'rgba(255,255,255,0.75)';
+ctx.fill();
+
+ctx.beginPath();
+ctx.arc(16,8,5,0,Math.PI*2);
+ctx.fillStyle = 'rgba(255,255,255,0.4)';
+ctx.fill();
+
+ctx.restore();
+
+// Text
+ctx.font = '600 42px system-ui';
+ctx.textAlign = 'center';
+ctx.fillStyle = 'rgba(124,109,245,0.5)';
+ctx.fillText('Vision Soul', W/2, W-60);
+
+// Download link
+document.getElementById('dl').href = c.toDataURL('image/png');
+</script>
+</body></html>
