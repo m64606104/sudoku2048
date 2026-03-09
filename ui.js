@@ -1071,6 +1071,8 @@ const UI = (() => {
     const nicknameInput = document.getElementById('char-edit-nickname');
     const bgInput = document.getElementById('char-edit-background');
     const personalityInput = document.getElementById('char-edit-personality');
+    const speechStyleInput = document.getElementById('char-edit-speech-style');
+    const speechExampleInput = document.getElementById('char-edit-speech-example');
 
     if (charId) {
       // Editing existing
@@ -1082,6 +1084,8 @@ const UI = (() => {
       nicknameInput.value = c.nickname || '';
       bgInput.value = c.background || '';
       personalityInput.value = c.personality || '';
+      speechStyleInput.value = c.speechStyle || '';
+      speechExampleInput.value = c.speechExample || '';
       editingAvatarBase64 = c.avatar || '';
       setEditAvatarPreview(c.avatar);
     } else {
@@ -1091,6 +1095,8 @@ const UI = (() => {
       nicknameInput.value = '';
       bgInput.value = '';
       personalityInput.value = '';
+      speechStyleInput.value = '';
+      speechExampleInput.value = '';
       editingAvatarBase64 = '';
       setEditAvatarPreview('');
     }
@@ -1117,6 +1123,8 @@ const UI = (() => {
       nickname: document.getElementById('char-edit-nickname').value.trim(),
       background: document.getElementById('char-edit-background').value.trim(),
       personality: document.getElementById('char-edit-personality').value.trim(),
+      speechStyle: document.getElementById('char-edit-speech-style').value.trim(),
+      speechExample: document.getElementById('char-edit-speech-example').value.trim(),
       avatar: editingAvatarBase64
     };
 

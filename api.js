@@ -42,6 +42,12 @@ const API = (() => {
     if (character.personality) {
       parts.push(`性格特征：${character.personality}`);
     }
+    if (character.speechStyle) {
+      parts.push(`语言风格：${character.speechStyle}`);
+    }
+    if (character.speechExample) {
+      parts.push(`说话示例（模仿这个语气和风格）：\n${character.speechExample}`);
+    }
 
     // ---- AI 记忆 ----
     const memories = Store.getMemories();

@@ -107,6 +107,8 @@ const Store = (() => {
       avatar: char.avatar || '',
       background: char.background || '',
       personality: char.personality || '',
+      speechStyle: char.speechStyle || '',
+      speechExample: char.speechExample || '',
       nickname: char.nickname || '',
       createdAt: Date.now()
     };
