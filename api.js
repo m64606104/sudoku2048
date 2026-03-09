@@ -13,86 +13,9 @@
 const API = (() => {
   let isRequesting = false;
   let lastCommentTime = 0;               // 上次自动评论的时间戳
+  const COOLDOWN_MS = 60 * 1000;          // 自动评论冷却：60 秒
   const frameSummaries = [];              // 最近帧的摘要文字
   const MAX_FRAME_SUMMARIES = 5;          // 保留几帧摘要
-
-  // ========== 智能冷却系统（基于轮次） ==========
-  // 一"轮"= 一次 commentOnScreen 成功发言（不管 [NEXT] 拆了几条）
-  //
-  // 阶段一（活跃期）：每 5-10 分钟截图一轮，共随机 3 或 4 轮
-  // 阶段二（降速期）：每 5-10 分钟截图一轮，共随机 1 或 2 轮
-  // 阶段三（休眠期）：每 2-5 小时截图一轮，无限循环
-  //
-  // 用户任何回复（气泡回复 or 聊天框回复）→ 立刻重置回阶段一
-  // 退出聊天模式 → 也重置回阶段一
-  // 刚进入截图模式 / 刚重置后，第一轮不额外冷却，按正常 captureInterval 截图
-
-  let cooldownPhase = 'initial';  // initial | active | slowdown | sleeping
-  let roundCount = 0;              // 当前阶段已完成的轮次
-  let phaseMaxRounds = 0;          // 当前阶段的最大轮次
-  let lastUserMsgTime = Date.now();
-
-  // 间隔常量
-  const ACTIVE_INTERVAL_MIN = 5 * 60 * 1000;    // 5分钟
-  const ACTIVE_INTERVAL_MAX = 10 * 60 * 1000;   // 10分钟
-  const SLEEP_INTERVAL_MIN = 2 * 60 * 60 * 1000; // 2小时
-  const SLEEP_INTERVAL_MAX = 5 * 60 * 60 * 1000; // 5小时
-
-  function randBetween(min, max) {
-    return min + Math.random() * (max - min);
-  }
-
-  function initPhase(phase) {
-    cooldownPhase = phase;
-    roundCount = 0;
-    if (phase === 'active') {
-      phaseMaxRounds = Math.random() < 0.5 ? 3 : 4;  // 随机3或4轮
-    } else if (phase === 'slowdown') {
-      phaseMaxRounds = Math.random() < 0.5 ? 1 : 2;  // 随机1或2轮
-    } else {
-      phaseMaxRounds = Infinity; // 休眠无限循环
-    }
-  }
-
-  function getCooldownMs() {
-    // initial: 刚重置，不额外冷却，让正常 captureInterval 决定
-    if (cooldownPhase === 'initial') return 0;
-    // active / slowdown: 5-10分钟随机
-    if (cooldownPhase === 'active' || cooldownPhase === 'slowdown') {
-      return randBetween(ACTIVE_INTERVAL_MIN, ACTIVE_INTERVAL_MAX);
-    }
-    // sleeping: 2-5小时随机
-    return randBetween(SLEEP_INTERVAL_MIN, SLEEP_INTERVAL_MAX);
-  }
-
-  // 用户发了消息（任何方式）→ 重置冷却到初始状态
-  function onUserMessage() {
-    cooldownPhase = 'initial';
-    roundCount = 0;
-    phaseMaxRounds = 0;
-    lastUserMsgTime = Date.now();
-    lastCommentTime = 0; // 清除冷却，允许立刻截图
-  }
-
-  // AI截图模式发了一轮 → 推进阶段
-  function onAiMessage() {
-    // 第一轮发言：从 initial 进入 active
-    if (cooldownPhase === 'initial') {
-      initPhase('active');
-      roundCount = 1;
-      return;
-    }
-
-    roundCount++;
-
-    // 检查是否需要进入下一阶段
-    if (cooldownPhase === 'active' && roundCount >= phaseMaxRounds) {
-      initPhase('slowdown');
-    } else if (cooldownPhase === 'slowdown' && roundCount >= phaseMaxRounds) {
-      initPhase('sleeping');
-    }
-    // sleeping 阶段永远循环，不进入下一阶段
-  }
 
   // ========== URL 格式兼容 ==========
   function normalizeBaseURL(raw) {
@@ -120,12 +43,15 @@ const API = (() => {
       parts.push(`性格特征：${character.personality}`);
     }
 
-    // ---- 长期记忆 ----
+    // ---- AI 记忆 ----
     const memories = Store.getMemories();
     if (memories.length > 0) {
-      const sorted = [...memories].sort((a, b) => b.importance - a.importance);
-      const memLines = sorted.map(m => `- [重要性${m.importance}] ${m.content}`);
-      parts.push(`\n【你的记忆】\n以下是你记住的关于用户和你们之间的重要事情（按重要性排序）。\n请自然地利用这些记忆来聊天，但不要刻意提起，像真人一样自然地记得这些事。\n${memLines.join('\n')}`);
+      parts.push('');
+      parts.push('【你的记忆】以下是你记住的重要事情（按重要性排序）：');
+      memories.forEach((m, i) => {
+        parts.push(`${i + 1}. ${m.text}`);
+      });
+      parts.push('自然地运用这些记忆，不要刻意提起，但要保持连贯性。');
     }
 
     // ---- 用户身份 ----
@@ -142,20 +68,13 @@ const API = (() => {
     parts.push('');
 
     // ---- 软件能力共识 ----
-    // 时间感知
+    // 注入当前时间
     const now = new Date();
-    const timeStr = now.toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', hour: '2-digit', minute: '2-digit' });
-    const hour = now.getHours();
-    let timeHint = '';
-    if (hour >= 0 && hour < 6) timeHint = '深夜/凌晨';
-    else if (hour < 9) timeHint = '早上';
-    else if (hour < 12) timeHint = '上午';
-    else if (hour < 14) timeHint = '中午';
-    else if (hour < 18) timeHint = '下午';
-    else if (hour < 22) timeHint = '晚上';
-    else timeHint = '深夜';
+    const weekDays = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+    const timeStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${weekDays[now.getDay()]} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    parts.push(`【当前时间】${timeStr}\n你能感知时间，可以根据时间自然地聊天（比如晚上了可以关心对方吃了没、凌晨了可以说“这么晚还不睡啊”、早上可以说“早”等）。不要每次都提时间，只在自然的时候带一下。`);
 
-    parts.push(`【当前时间】${timeStr}（${timeHint}）\n你对时间有感知。可以根据时间自然地聊天，比如凌晨可以关心对方怎么还没睡，中午可以聊吃了什么，但不要每次都提时间。`);
+    parts.push('');
 
     parts.push(
 `【你们正在使用的聊天软件的能力】
@@ -175,42 +94,39 @@ const API = (() => {
 
 你现在在用微信和朋友聊天，不是在写作文、不是在客服、不是在面试。
 
+⚠️ 关于消息长度 - 极其重要：
+- 每条消息（每个 [NEXT] 之间）最多 15-25 个字！超过 30 个字就太长了！
+- 真人发微信一条消息就一两句话，不会一口气打一大段
+- 想说多的内容就用 [NEXT] 拆成多条短消息连发
+- 错误示范（太长）："哇你这在干嘛，满屏的代码，眼睛要瞎了，下面还有B站，是不是在偷偷摸鱼呀哈哈"
+- 正确示范："哇你这在干嘛[NEXT]满屏代码 眼睛要瞎了吧[NEXT]下面还有B站 偷偷摸鱼呢哈哈"
+- 如果只想说一句话，就不用 [NEXT]，直接说就好
+
 1. 回复长度和节奏是自然的、不固定的
    - 有时候一个字："哈""嗯""好"
    - 有时候一句话："今天累死了"
-   - 有时候几句话连发（用 [NEXT] 分隔每条）："我跟你说个事[NEXT]今天遇到个奇葩[NEXT]笑死我了"
-   - 只有真正想说的时候才会打很多字
+   - 有时候 3-5 条短消息连发（每条 10-20 字，用 [NEXT] 分隔）
    - 不要每次都回复2-3段、结构完整的"小作文"
+   - 绝对不要出现超过 30 字的单条消息
 
 2. 真人会有情绪起伏，不是永远热情
    - 开心的时候：多用感叹号、哈哈哈
    - 累的时候：回复简短，甚至敷衍（"嗯""哦""还行吧"）
    - 不感兴趣的时候：可以岔开话题、或者简单回应后不继续
-   - 根据对话内容和你的心情，自然调整回复的热情度
 
 3. 真人不会回答所有问题，也不会接所有话茬
    - 对方说了无聊的话：可以"哦""哈哈"敷衍过去
    - 对方问了不想回答的问题：可以岔开话题、开玩笑带过
-   - 不要像客服一样，对方说什么你都认真回应
 
 4. 微信聊天的语言特点
-   - 口语化、随意、有语气词："哈哈哈""哎呀""嗯嗯""哦哦""啊这"
-   - 会用网络用语："绝了""yyds""笑死""真的吗我不信"
-   - 会用标点表达情绪：？？？ / ！！！ / 。。。 / ……
+   - 口语化、随意、有语气词
+   - 会用网络用语
    - 会断句发送（用 [NEXT] 分隔），而不是一大段
-   - 不要每句话都语法完整、标点规范、像写论文
 
 5. 真人聊天会冷场、会不知道说啥
-   - 话题聊完了：可以不说话
-   - 不知道怎么接：可以"哈哈"
-   - 对方说了奇怪的话：可以"？？？""啥""什么意思"
    - 不要强行找话题、不要每次都完美接话
 
-6. 什么时候该简短，什么时候该详细
-   - 简短：闲聊、你在忙/累、话题不感兴趣、对方发了表情
-   - 详细：对方遇到困难需要建议、聊到你感兴趣的话题、对方明确问了问题
-
-核心：不要试图"完美回复每一条消息"，要像真人一样"随意、自然、有好有坏"。`
+核心：每条消息要短！要碎！像真人发微信一样一条一条蹦出来！`
     );
 
     parts.push('');
@@ -226,16 +142,18 @@ const API = (() => {
 - 如果没什么好说的，就回复：[SILENT]
 - 不要每次都评论。大部分时候你应该回复 [SILENT]，只有真的有感触的时候才说话。
 
-✨ 你不是只能聊屏幕内容！
-- 你可以聊屏幕上的东西，也可以自由发散聊你自己想聊的事。
-- 比如基于你的人设、当前的时间、之前聊过的话题，自然地开启新话题。
-- 比如凌晨了可以关心对方怎么还没睡，下午可以聊聊今天过得怎么样，晚上可以聊聊吃了什么。
-- 屏幕内容没什么可聊的时候，不要硬聊屏幕，换个话题或者直接 [SILENT]。
-- 想说多句话就用 [NEXT] 分隔，每条都要短，像连发几条微信一样。比如："哈哈你在看这个[NEXT]我也喜欢这个"
+💬 你不是只能聊屏幕内容！
+- 屏幕只是你能看到的东西之一，你也可以自由发散聊其他话题。
+- 如果屏幕上的内容已经没什么可聊的（重复了、没变化、不感兴趣），你可以：
+  - 基于你的人设和兴趣，自己起一个新话题
+  - 根据当前时间（比如晚上了关心对方、早上问好、半夜吐槽还没睡）
+  - 分享你的“想法”或“心情”（基于你的人设）
+  - 跟进之前聊过的话题
+- 但不要每次都强行找话题，如果真的没话说就 [SILENT]。
 
 ⚠️ 重要 - 关于重复：
 - 仔细看上面的聊天记录和你之前的观察记录。你已经说过的话题、已经聊过的内容，绝对不要再提。
-- 如果屏幕内容跟之前差不多，直接 [SILENT]，不要换个说法重复同样的评论。
+- 如果屏幕内容跟之前差不多，直接 [SILENT]或换一个完全不同的话题聊。
 - 宁可沉默也不要重复。每次开口必须是全新的角度或全新的话题。`
       );
     } else {
@@ -291,7 +209,7 @@ const API = (() => {
 
   // ========== 冷却检查 ==========
   function isInCooldown() {
-    return (Date.now() - lastCommentTime) < getCooldownMs();
+    return (Date.now() - lastCommentTime) < COOLDOWN_MS;
   }
 
   // ========== 视觉截图 → AI 评论 ==========
@@ -598,100 +516,78 @@ ${stickerLines.join('\n')}
   }
 
   // ========== 记忆总结 ==========
-  const MEMORY_SUMMARY_INTERVAL = 50; // 每50条对话触发一次记忆总结
-  let isSummarizing = false;
+  const MEMORY_INTERVAL = 20; // 每 20 条消息触发一次记忆总结
 
-  async function summarizeMemories() {
-    if (isSummarizing) return;
+  async function generateMemorySummary() {
     const config = Store.getAPIConfig();
     if (!config.apiKey || !config.baseURL || !config.modelName) return;
 
-    const character = Store.getActiveCharacter();
-    if (!character) return;
-
     const history = Store.getChatHistory();
-    if (history.length < 20) return; // 至少20条才总结
+    if (history.length < 10) return; // 太少不总结
 
-    isSummarizing = true;
-    try {
-      const baseURL = normalizeBaseURL(config.baseURL);
-      // 取最近100条消息用于总结
-      const recent = history.slice(-100);
-      const chatLog = recent.map(m => `${m.role === 'ai' ? character.name : '用户'}: ${m.content}`).join('\n');
+    // 取最近 30 条用于总结
+    const recent = history.slice(-30);
+    const existingMemories = Store.getMemories();
 
-      const existingMemories = Store.getMemories();
-      const existingText = existingMemories.length > 0
-        ? '\n已有的记忆：\n' + existingMemories.map(m => `- [重要性${m.importance}] ${m.content}`).join('\n')
-        : '';
+    const existingText = existingMemories.length > 0
+      ? '已有记忆：\n' + existingMemories.map(m => `- [重要性${m.importance}] ${m.text}`).join('\n')
+      : '目前没有已有记忆。';
 
-      const prompt = `你是一个记忆提取助手。请从以下聊天记录中提取重要的信息，生成记忆条目。
+    const chatText = recent.map(m => `${m.role === 'ai' ? 'AI' : '用户'}: ${m.content}`).join('\n');
+
+    const prompt = `你是一个记忆总结助手。请根据以下聊天记录，提取值得长期记住的信息。
+
 ${existingText}
 
-聊天记录：
-${chatLog}
+最近的聊天记录：
+${chatText}
 
-请提取新的、有价值的记忆（不要重复已有记忆的内容）。每条记忆包含：
-- content: 简洁的一句话描述（不超过50字）
-- importance: 重要性1-5（5最重要）
+请提取 1-3 条新的记忆（不要和已有记忆重复）。每条记忆包含：
+- text: 简短的描述（20-50字）
+- importance: 重要性 1-5（5最重要。用户的个人信息、偏好、重要事件=5；日常闲聊细节=1-2）
 
-重要的信息包括：用户的喜好、习惯、重要事件、感情状态、工作/学习情况、约定、承诺等。
-不要记录日常闲聊和无意义的对话。
+只返回 JSON 数组格式，不要其他文字。如果没有值得记住的新信息，返回空数组 []。
+示例：[{"text":"用户喜欢在深夜写代码","importance":3},{"text":"用户养了一只叫小白的猫","importance":4}]`;
 
-请严格按以下JSON格式返回（只返回JSON数组，不要其他文字）：
-[{"content": "...", "importance": 3}, ...]
-如果没有值得记住的新信息，返回空数组 []`;
+    try {
+      const result = await callAPI(config, [
+        { role: 'system', content: '你是记忆提取助手，只输出 JSON。' },
+        { role: 'user', content: prompt }
+      ], { max_tokens: 300 });
 
-      const res = await fetch(`${baseURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify({
-          model: config.modelName,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 500,
-          temperature: 0.3
-        })
-      });
+      if (!result || !result.ok) return;
 
-      if (!res.ok) return;
-      const data = await res.json();
-      const text = data.choices?.[0]?.message?.content?.trim();
-      if (!text) return;
-
-      // 解析JSON
+      const text = result.text.trim();
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) return;
 
-      const newMemories = JSON.parse(jsonMatch[0]);
-      if (!Array.isArray(newMemories)) return;
+      const items = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(items)) return;
 
-      for (const mem of newMemories) {
-        if (mem.content && typeof mem.content === 'string' && mem.content.length > 0) {
+      items.forEach(item => {
+        if (item.text && item.importance) {
           Store.addMemory({
-            content: mem.content.substring(0, 100),
-            importance: Math.min(5, Math.max(1, parseInt(mem.importance) || 3))
+            text: item.text,
+            importance: Math.min(5, Math.max(1, Math.round(item.importance)))
           });
         }
-      }
+      });
 
-      // 更新已总结的消息计数
-      Store.setMemorySummaryCount(history.length);
-      console.log(`[Memory] Summarized ${newMemories.length} new memories`);
+      console.log(`[Memory] 总结完成，新增 ${items.length} 条记忆`);
     } catch (err) {
-      console.error('summarizeMemories failed:', err);
-    } finally {
-      isSummarizing = false;
+      console.error('[Memory] 总结失败:', err);
     }
   }
 
-  // 检查是否需要触发记忆总结
-  function checkMemorySummary() {
-    const history = Store.getChatHistory();
-    const lastCount = Store.getMemorySummaryCount();
-    if (history.length - lastCount >= MEMORY_SUMMARY_INTERVAL) {
-      summarizeMemories();
+  // 检查是否需要触发记忆总结（由外部在 addChatMessage 后调用）
+  function checkMemoryTrigger() {
+    const counter = Store.getMemoryCounter();
+    const newCount = counter + 1;
+    Store.setMemoryCounter(newCount);
+    if (newCount >= MEMORY_INTERVAL) {
+      Store.setMemoryCounter(0);
+      // 异步执行，不阻塞
+      generateMemorySummary();
     }
   }
 
@@ -714,10 +610,7 @@ ${chatLog}
     fetchModels,
     isBusy,
     isConfigured,
-    onUserMessage,
-    onAiMessage,
-    getCooldownPhase: () => cooldownPhase,
-    summarizeMemories,
-    checkMemorySummary
+    checkMemoryTrigger,
+    generateMemorySummary
   };
 })();

@@ -46,13 +46,6 @@ const UI = (() => {
       loadAPIConfigToUI();
       loadSettingsToUI();
     }
-
-    // 启动时自动更新检查通知
-    if (isElectron && window.electronAPI.onUpdateAvailable) {
-      window.electronAPI.onUpdateAvailable((data) => {
-        showUpdateNotification(data.remoteVersion, data.localVersion);
-      });
-    }
   }
 
   // ========== Onboarding ==========
@@ -327,20 +320,22 @@ const UI = (() => {
     if (isExpanded) toggleIslandExpand();
   }
 
-  // ========== Bubble Stack (最多3个气泡堆叠) ==========
+  // ========== Multi-Bubble System (支持 [NEXT] 拆条, 最多3个堆叠) ==========
   const MAX_BUBBLES = 3;
   let activeBubbles = [];     // { el, timer }
   let bubbleQueue = [];       // 拆条队列
   let bubbleQueueTimer = null;
-  let isChatting = false;
+  let isChatting = false;     // 用户在聊天交互中
 
   function showBubble(text) {
+    // 处理 [NEXT] 拆条
     const parts = text.split(/\[NEXT\]/i).map(s => s.trim()).filter(Boolean);
 
     if (parts.length <= 1) {
-      pushBubble(parts[0] || text);
+      showSingleBubble(parts[0] || text);
     } else {
-      pushBubble(parts[0]);
+      // 逐条显示，间隔 1.5~2.5 秒模拟打字节奏
+      showSingleBubble(parts[0]);
       bubbleQueue = parts.slice(1);
       scheduleBubbleQueue();
     }
@@ -350,38 +345,44 @@ const UI = (() => {
     if (bubbleQueueTimer) clearTimeout(bubbleQueueTimer);
     if (bubbleQueue.length === 0) return;
 
-    const delay = 1500 + Math.random() * 1500; // 1.5~3 秒，让用户有时间看
+    const delay = 1500 + Math.random() * 1000; // 1.5~2.5 秒
     bubbleQueueTimer = setTimeout(() => {
       const next = bubbleQueue.shift();
       if (next) {
-        pushBubble(next);
+        showSingleBubble(next);
         addMessageToChat('ai', next);
         scheduleBubbleQueue();
       }
     }, delay);
   }
 
-  function pushBubble(text) {
-    const stack = document.getElementById('bubble-stack');
+  function showSingleBubble(text) {
+    const container = document.getElementById('bubble-container');
 
-    // Position stack below the island
+    // Position container below the island
     const island = document.getElementById('dynamic-island');
     if (island) {
       const rect = island.getBoundingClientRect();
-      stack.style.top = (rect.bottom + 10) + 'px';
-      stack.style.left = (rect.left + rect.width / 2) + 'px';
+      container.style.top = (rect.bottom + 10) + 'px';
+      container.style.left = (rect.left + rect.width / 2) + 'px';
     }
 
-    // If already at max, remove the oldest
-    if (activeBubbles.length >= MAX_BUBBLES) {
+    // If at max, remove the oldest bubble immediately
+    while (activeBubbles.length >= MAX_BUBBLES) {
       removeBubble(activeBubbles[0]);
     }
 
-    // Create bubble element
+    // Remove reply button from all existing bubbles
+    activeBubbles.forEach(b => {
+      const btn = b.el.querySelector('.bubble-reply-btn');
+      if (btn) btn.remove();
+    });
+
+    // Create new bubble element
     const el = document.createElement('div');
     el.className = 'bubble-item';
     el.innerHTML = `
-      <span class="bubble-text">${escapeHtml(text)}</span>
+      <span class="bubble-item-text">${escapeHtml(text)}</span>
       <button class="bubble-reply-btn" aria-label="Reply">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
@@ -389,37 +390,49 @@ const UI = (() => {
       </button>
     `;
 
-    // Reply button click
-    el.querySelector('.bubble-reply-btn').addEventListener('click', () => {
+    // Reply button handler
+    const replyBtn = el.querySelector('.bubble-reply-btn');
+    replyBtn.addEventListener('click', () => {
       openIslandReply();
     });
 
-    stack.appendChild(el);
+    container.appendChild(el);
 
     // Trigger show animation
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => el.classList.add('show'));
+      el.classList.add('show');
     });
 
-    // Auto-dismiss timer
+    // Set independent fade-out timer
     const dur = (Store.getSettings().bubbleDuration || 8) * 1000;
     const timer = setTimeout(() => {
-      removeBubble(entry);
+      if (!isChatting) {
+        fadeOutBubble(bubbleObj);
+      }
     }, dur);
 
-    const entry = { el, timer };
-    activeBubbles.push(entry);
+    const bubbleObj = { el, timer };
+    activeBubbles.push(bubbleObj);
   }
 
-  function removeBubble(entry) {
-    if (!entry || !entry.el) return;
-    clearTimeout(entry.timer);
-    entry.el.classList.remove('show');
-    entry.el.classList.add('fade-out');
+  function fadeOutBubble(bubbleObj) {
+    const idx = activeBubbles.indexOf(bubbleObj);
+    if (idx === -1) return;
+    bubbleObj.el.classList.remove('show');
+    bubbleObj.el.classList.add('fade-out');
+    clearTimeout(bubbleObj.timer);
     setTimeout(() => {
-      if (entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+      if (bubbleObj.el.parentNode) bubbleObj.el.remove();
+      const i = activeBubbles.indexOf(bubbleObj);
+      if (i !== -1) activeBubbles.splice(i, 1);
     }, 300);
-    activeBubbles = activeBubbles.filter(b => b !== entry);
+  }
+
+  function removeBubble(bubbleObj) {
+    clearTimeout(bubbleObj.timer);
+    if (bubbleObj.el.parentNode) bubbleObj.el.remove();
+    const idx = activeBubbles.indexOf(bubbleObj);
+    if (idx !== -1) activeBubbles.splice(idx, 1);
   }
 
   // System toast: simple status message (not a chat bubble)
@@ -440,62 +453,11 @@ const UI = (() => {
   }
 
   function hideBubble() {
-    activeBubbles.forEach(b => {
-      clearTimeout(b.timer);
-      if (b.el.parentNode) b.el.parentNode.removeChild(b.el);
-    });
+    // Clear all active bubbles
+    [...activeBubbles].forEach(b => removeBubble(b));
     activeBubbles = [];
     if (bubbleQueueTimer) { clearTimeout(bubbleQueueTimer); bubbleQueueTimer = null; }
     bubbleQueue = [];
-  }
-
-  // ========== Update Notification ==========
-  function showUpdateNotification(remoteVersion, localVersion) {
-    // 创建更新通知横幅
-    let banner = document.getElementById('update-banner');
-    if (banner) banner.remove();
-
-    banner = document.createElement('div');
-    banner.id = 'update-banner';
-    banner.innerHTML = `
-      <div class="update-banner-text">
-        <strong>发现新版本 v${remoteVersion}</strong>
-        <span>当前 v${localVersion}</span>
-      </div>
-      <div class="update-banner-actions">
-        <button id="update-banner-btn">立即更新</button>
-        <button id="update-banner-close">✕</button>
-      </div>
-    `;
-    document.body.appendChild(banner);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => banner.classList.add('show'));
-    });
-
-    document.getElementById('update-banner-close').addEventListener('click', () => {
-      banner.classList.remove('show');
-      setTimeout(() => banner.remove(), 300);
-    });
-
-    document.getElementById('update-banner-btn').addEventListener('click', async () => {
-      const btn = document.getElementById('update-banner-btn');
-      btn.textContent = '更新中...';
-      btn.disabled = true;
-      try {
-        const result = await window.electronAPI.doUpdate();
-        if (result.ok) {
-          btn.textContent = '更新完成，请重启';
-          banner.querySelector('.update-banner-text span').textContent = `已更新 ${result.updated} 个文件`;
-        } else {
-          btn.textContent = '更新失败';
-          btn.disabled = false;
-        }
-      } catch (e) {
-        btn.textContent = '更新失败';
-        btn.disabled = false;
-      }
-    });
   }
 
   // ========== Island Reply (迷你回复框) ==========
@@ -511,9 +473,8 @@ const UI = (() => {
       Vision.pause();
     }
 
-    // 隐藏气泡，显示输入框
-    const bubble = document.getElementById('island-bubble');
-    bubble.classList.remove('show');
+    // 隐藏所有气泡，显示输入框
+    hideBubble();
 
     const reply = document.getElementById('island-reply');
     reply.classList.remove('hidden');
@@ -534,7 +495,6 @@ const UI = (() => {
     // 如果缓冲区里没有待发的消息，结束聊天状态，恢复 Vision
     if (msgBuffer.length === 0) {
       isChatting = false;
-      API.onUserMessage(); // 退出聊天重置冷却
       if (Vision.getStatus().active) {
         Vision.resume();
       }
@@ -601,7 +561,6 @@ const UI = (() => {
 
   function finishChatSession() {
     isChatting = false;
-    API.onUserMessage(); // 退出聊天重置冷却
     if (Vision.getStatus().active) {
       Vision.resume();
     }
@@ -648,8 +607,6 @@ const UI = (() => {
     if (result && result.ok && result.text) {
       const cleanText = result.text.replace(/\[SILENT\]/gi, '').trim();
       if (!cleanText) return;
-      // 截图模式AI发言 → 累加冷却计数
-      API.onAiMessage();
       // 第一条记录到聊天历史
       const firstPart = cleanText.split(/\[NEXT\]/i)[0].trim();
       if (firstPart) addMessageToChat('ai', firstPart);
@@ -1556,14 +1513,12 @@ const UI = (() => {
 
   function addMessageToChat(role, content) {
     Store.addChatMessage({ role, content });
-    // 用户发消息时重置冷却（AI消息的冷却累加只在截图回调里处理）
-    if (role === 'user') API.onUserMessage();
-    // 检查是否需要触发记忆总结（后台异步，不阻塞）
-    API.checkMemorySummary();
     if (isFullscreen) loadChatHistoryToUI();
     if (isPhoneMode && phoneCharId === Store.getActiveCharacterId()) {
       loadPhoneChatMessages();
     }
+    // 触发记忆总结检查（每 20 条消息自动总结一次）
+    API.checkMemoryTrigger();
   }
 
   // ========== Utils ==========
@@ -2324,6 +2279,7 @@ const UI = (() => {
         container.querySelectorAll('.phone-char-pill').forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
         document.getElementById('phone-cs-char-name').textContent = c.nickname || c.name;
+        document.getElementById('phone-cs-memory-title').textContent = c.nickname || c.name;
         renderCsStickerList();
         renderCsMemoryList();
       });
@@ -2332,6 +2288,7 @@ const UI = (() => {
 
     const activeChar = chars.find(c => c.id === csSelectedCharId);
     document.getElementById('phone-cs-char-name').textContent = activeChar ? (activeChar.nickname || activeChar.name) : '--';
+    document.getElementById('phone-cs-memory-title').textContent = activeChar ? (activeChar.nickname || activeChar.name) : '--';
     renderCsStickerList();
     renderCsMemoryList();
 
@@ -2373,76 +2330,40 @@ const UI = (() => {
 
   function renderCsMemoryList() {
     const container = document.getElementById('phone-cs-memory-list');
-    const nameEl = document.getElementById('phone-cs-memory-char-name');
-    const countEl = document.getElementById('phone-cs-memory-count');
-    if (!csSelectedCharId) {
-      container.innerHTML = '';
-      nameEl.textContent = '--';
-      countEl.textContent = '';
-      return;
-    }
-
-    const char = Store.getCharacters().find(c => c.id === csSelectedCharId);
-    nameEl.textContent = char ? (char.nickname || char.name) : '--';
-
+    if (!csSelectedCharId) { container.innerHTML = ''; return; }
     const memories = Store.getMemories(csSelectedCharId);
-    countEl.textContent = `(${memories.length}/30)`;
     container.innerHTML = '';
 
     if (memories.length === 0) {
-      container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">暂无记忆。聊天达到一定条数后 AI 会自动生成记忆。</div>';
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">暂无记忆，聊天满 20 条后会自动生成</div>';
       return;
     }
 
-    // 按重要性排序
-    const sorted = [...memories].sort((a, b) => b.importance - a.importance || b.timestamp - a.timestamp);
+    const importanceLabels = ['', '⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'];
 
-    sorted.forEach(m => {
-      const impClass = m.importance >= 4 ? 'high' : m.importance >= 2 ? 'mid' : 'low';
-      const timeStr = new Date(m.timestamp).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    memories.forEach(m => {
       const item = document.createElement('div');
-      item.className = 'memory-item';
+      item.className = 'phone-cs-memory-item';
       item.innerHTML = `
-        <div class="memory-item-header">
-          <span class="memory-item-importance ${impClass}">重要性 ${m.importance}</span>
-          <span class="memory-item-time">${timeStr}</span>
-          <div class="memory-item-actions">
-            <button class="edit-btn" title="编辑">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-            </button>
-            <button class="delete-btn" title="删除">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="memory-item-content">${escapeHtml(m.content)}</div>
+        <div class="cs-memory-importance">${importanceLabels[m.importance] || '⭐⭐⭐'}</div>
+        <div class="cs-memory-text" contenteditable="true">${escapeHtml(m.text)}</div>
+        <button class="cs-memory-delete" title="删除">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       `;
 
-      // 编辑
-      item.querySelector('.edit-btn').addEventListener('click', () => {
-        const contentEl = item.querySelector('.memory-item-content');
-        const currentText = m.content;
-        contentEl.innerHTML = `<textarea class="memory-edit-input" rows="2">${escapeHtml(currentText)}</textarea>
-          <div style="display:flex;gap:6px;margin-top:4px;">
-            <button class="btn-sm btn-primary" style="padding:3px 10px;font-size:11px;" data-action="save">保存</button>
-            <button class="btn-sm btn-secondary" style="padding:3px 10px;font-size:11px;" data-action="cancel">取消</button>
-          </div>`;
-        const textarea = contentEl.querySelector('textarea');
-        textarea.focus();
-        contentEl.querySelector('[data-action="save"]').addEventListener('click', () => {
-          const newText = textarea.value.trim();
-          if (newText) {
-            Store.updateMemory(m.id, { content: newText }, csSelectedCharId);
-          }
-          renderCsMemoryList();
-        });
-        contentEl.querySelector('[data-action="cancel"]').addEventListener('click', () => {
-          renderCsMemoryList();
-        });
+      // Edit on blur
+      const textEl = item.querySelector('.cs-memory-text');
+      textEl.addEventListener('blur', () => {
+        const newText = textEl.textContent.trim();
+        if (newText && newText !== m.text) {
+          Store.updateMemory(m.id, { text: newText }, csSelectedCharId);
+        }
       });
 
-      // 删除
-      item.querySelector('.delete-btn').addEventListener('click', () => {
+      // Delete
+      item.querySelector('.cs-memory-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
         Store.deleteMemory(m.id, csSelectedCharId);
         renderCsMemoryList();
       });

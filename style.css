@@ -421,8 +421,8 @@ body.electron-mode #dynamic-island {
   transform: scale(0.9);
 }
 
-/* Bubble Stack */
-#bubble-stack {
+/* Multi-Bubble Container */
+#bubble-container {
   position: fixed;
   top: 80px;
   left: 50%;
@@ -431,62 +431,39 @@ body.electron-mode #dynamic-island {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  align-items: center;
   pointer-events: none;
-  max-width: 300px;
-  width: max-content;
+  max-width: 320px;
+  min-width: 60px;
 }
 
 .bubble-item {
-  background: var(--bg-glass);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--r-md);
-  padding: 10px 14px;
-  max-width: 280px;
-  min-width: 80px;
-  box-shadow: var(--shadow-lg);
+  background: linear-gradient(135deg, rgba(40, 36, 70, 0.92) 0%, rgba(28, 25, 52, 0.95) 100%);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(124, 109, 245, 0.15);
+  border-radius: 16px;
+  padding: 10px 16px;
+  max-width: 300px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 1px rgba(124, 109, 245, 0.2);
   white-space: normal;
   word-break: break-word;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(12px) scale(0.95);
+  transition: opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   pointer-events: auto;
 }
-
 .bubble-item.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
-
 .bubble-item.fade-out {
   opacity: 0;
-  transform: translateY(-8px);
-  pointer-events: none;
+  transform: translateY(-8px) scale(0.95);
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
-
-.bubble-item .bubble-text {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  flex: 1;
-}
-
-.bubble-item .bubble-reply-btn {
-  background: none;
-  border: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  transition: color 0.15s;
-}
-.bubble-item .bubble-reply-btn:hover { color: var(--accent); }
-.bubble-item .bubble-reply-btn svg { width: 16px; height: 16px; }
 
 /* System Toast */
 #system-toast {
@@ -513,7 +490,43 @@ body.electron-mode #dynamic-island {
   transform: translateX(-50%) translateY(0);
 }
 
+.bubble-item-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.5;
+  flex: 1;
+  letter-spacing: 0.01em;
+}
 
+.bubble-reply-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(124, 109, 245, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.bubble-reply-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke: var(--accent);
+}
+
+.bubble-reply-btn:hover {
+  background: var(--accent);
+  transform: scale(1.1);
+}
+
+.bubble-reply-btn:hover svg {
+  stroke: white;
+}
 
 /* Mini reply input */
 #island-reply {
@@ -2062,11 +2075,10 @@ body.electron-mode #dynamic-island {
     max-height: 95dvh;
   }
 
-  #bubble-stack {
+  #bubble-container {
     max-width: calc(100vw - 40px);
-  }
-  #bubble-stack .bubble-item {
-    max-width: calc(100vw - 60px);
+    left: auto;
+    right: auto;
   }
 
   .chat-msg {
@@ -3115,6 +3127,70 @@ body.electron-mode #dynamic-island {
   stroke-width: 3;
 }
 
+/* Memory list in chat settings */
+.phone-cs-memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.phone-cs-memory-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+}
+
+.cs-memory-importance {
+  font-size: 10px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.cs-memory-text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  outline: none;
+  min-height: 16px;
+  cursor: text;
+  border-radius: 4px;
+  padding: 1px 3px;
+  transition: background 0.2s;
+}
+
+.cs-memory-text:focus {
+  background: rgba(124, 109, 245, 0.1);
+}
+
+.cs-memory-delete {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+.cs-memory-delete:hover {
+  opacity: 1;
+}
+.cs-memory-delete svg {
+  width: 12px;
+  height: 12px;
+  stroke: var(--text-muted);
+}
+
 /* Sticker list items in manager (update for text type) */
 .phone-sticker-item .text-sticker-thumb {
   width: 60px;
@@ -3147,167 +3223,6 @@ body.electron-mode #dynamic-island {
   padding: 4px;
   word-break: break-word;
   line-height: 1.2;
-}
-
-/* Update Banner */
-#update-banner {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%) translateY(80px);
-  z-index: 10002;
-  background: var(--bg-elevated);
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 280px;
-  max-width: 360px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  opacity: 0;
-  transition: all 0.3s ease;
-  pointer-events: none;
-}
-#update-banner.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-}
-.update-banner-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.update-banner-text strong {
-  font-size: 13px;
-  color: var(--text-primary);
-}
-.update-banner-text span {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.update-banner-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-#update-banner-btn {
-  padding: 5px 12px;
-  border-radius: 8px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-#update-banner-btn:hover { background: var(--accent-hover); }
-#update-banner-btn:disabled { opacity: 0.6; cursor: default; }
-#update-banner-close {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: color 0.15s, background 0.15s;
-}
-#update-banner-close:hover { color: var(--text-primary); background: var(--bg-glass-light); }
-
-/* Memory list in chat settings */
-.phone-cs-memory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 40px;
-}
-
-.memory-item {
-  background: var(--bg-tertiary);
-  border-radius: 10px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border: 1px solid var(--border-subtle);
-}
-
-.memory-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.memory-item-importance {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.memory-item-importance.high { background: rgba(239,68,68,0.15); color: #ef4444; }
-.memory-item-importance.mid { background: rgba(234,179,8,0.15); color: #eab308; }
-.memory-item-importance.low { background: rgba(100,116,139,0.15); color: #64748b; }
-
-.memory-item-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.memory-item-actions button {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
-}
-.memory-item-actions button:hover { color: var(--accent); background: var(--bg-glass-light); }
-.memory-item-actions button.delete-btn:hover { color: #ef4444; }
-.memory-item-actions button svg { width: 14px; height: 14px; }
-
-.memory-item-content {
-  font-size: 13px;
-  color: var(--text-primary);
-  line-height: 1.4;
-}
-
-.memory-item-time {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.memory-edit-input {
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-medium);
-  background: var(--bg-glass-light);
-  color: var(--text-primary);
-  font-size: 13px;
-  resize: none;
 }
 
 /* ==========================================

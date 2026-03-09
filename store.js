@@ -165,8 +165,8 @@ const Store = (() => {
     save('chat_' + id, []);
   }
 
-  // ========== 记忆系统 ==========
-  const MAX_MEMORIES = 30;
+  // ========== AI 记忆 ==========
+  const MAX_MEMORIES = 100;
 
   function getMemories(characterId) {
     const id = characterId || getActiveCharacterId();
@@ -183,48 +183,49 @@ const Store = (() => {
   function addMemory(memory, characterId) {
     const id = characterId || getActiveCharacterId();
     if (!id) return;
-    const list = getMemories(id);
-    list.push({
+    const memories = getMemories(id);
+    memories.push({
       id: generateId(),
-      content: memory.content || '',
+      text: memory.text,
       importance: memory.importance || 3,
-      timestamp: Date.now()
+      createdAt: Date.now()
     });
-    // 超过上限时淘汰最低重要性的
-    if (list.length > MAX_MEMORIES) {
-      list.sort((a, b) => b.importance - a.importance || b.timestamp - a.timestamp);
-      list.splice(MAX_MEMORIES);
-    }
-    saveMemories(list, id);
+    // 按重要性降序排列
+    memories.sort((a, b) => b.importance - a.importance);
+    // 超出上限则删除最不重要的
+    while (memories.length > MAX_MEMORIES) memories.pop();
+    saveMemories(memories, id);
   }
 
   function updateMemory(memoryId, updates, characterId) {
     const id = characterId || getActiveCharacterId();
     if (!id) return;
-    const list = getMemories(id);
-    const idx = list.findIndex(m => m.id === memoryId);
+    const memories = getMemories(id);
+    const idx = memories.findIndex(m => m.id === memoryId);
     if (idx === -1) return;
-    Object.assign(list[idx], updates);
-    saveMemories(list, id);
+    Object.assign(memories[idx], updates);
+    memories.sort((a, b) => b.importance - a.importance);
+    saveMemories(memories, id);
   }
 
   function deleteMemory(memoryId, characterId) {
     const id = characterId || getActiveCharacterId();
     if (!id) return;
-    const list = getMemories(id).filter(m => m.id !== memoryId);
-    saveMemories(list, id);
+    const memories = getMemories(id);
+    const filtered = memories.filter(m => m.id !== memoryId);
+    saveMemories(filtered, id);
   }
 
-  function getMemorySummaryCount(characterId) {
+  function getMemoryCounter(characterId) {
     const id = characterId || getActiveCharacterId();
     if (!id) return 0;
-    return load('memory_summary_count_' + id) || 0;
+    return load('memory_counter_' + id) || 0;
   }
 
-  function setMemorySummaryCount(count, characterId) {
+  function setMemoryCounter(count, characterId) {
     const id = characterId || getActiveCharacterId();
     if (!id) return;
-    save('memory_summary_count_' + id, count);
+    save('memory_counter_' + id, count);
   }
 
   // ========== 行为记录 ==========
@@ -393,7 +394,7 @@ const Store = (() => {
     getActiveCharacterId, setActiveCharacterId, getActiveCharacter,
     getChatHistory, addChatMessage, clearChatHistory,
     getMemories, saveMemories, addMemory, updateMemory, deleteMemory,
-    getMemorySummaryCount, setMemorySummaryCount,
+    getMemoryCounter, setMemoryCounter,
     getBehaviorLog, addBehavior,
     getStickers, addSticker, deleteSticker,
     getUserProfile, saveUserProfile,

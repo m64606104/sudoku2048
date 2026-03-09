@@ -58,32 +58,6 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // 启动后5秒自动检查更新
-  mainWindow.webContents.on('did-finish-load', () => {
-    setTimeout(async () => {
-      try {
-        const raw = await new Promise((resolve, reject) => {
-          const url = 'https://raw.githubusercontent.com/m64606104/sudoku2048/main/package.json';
-          https.get(url, res => {
-            let d = '';
-            res.on('data', c => d += c);
-            res.on('end', () => resolve(d));
-          }).on('error', reject);
-        });
-        const remote = JSON.parse(raw);
-        const localPkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
-        if (remote.version !== localPkg.version) {
-          mainWindow.webContents.send('update-available', {
-            remoteVersion: remote.version,
-            localVersion: localPkg.version
-          });
-        }
-      } catch (e) {
-        // 静默失败，不打扰用户
-      }
-    }, 5000);
-  });
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
