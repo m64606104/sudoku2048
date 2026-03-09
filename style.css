@@ -3149,6 +3149,82 @@ body.electron-mode #dynamic-island {
   line-height: 1.2;
 }
 
+/* Update Banner */
+#update-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  z-index: 10002;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+#update-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.update-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.update-banner-text strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.update-banner-text span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#update-banner-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+#update-banner-btn:hover { background: var(--accent-hover); }
+#update-banner-btn:disabled { opacity: 0.6; cursor: default; }
+#update-banner-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+}
+#update-banner-close:hover { color: var(--text-primary); background: var(--bg-glass-light); }
+
 /* Memory list in chat settings */
 .phone-cs-memory-list {
   display: flex;

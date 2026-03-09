@@ -46,6 +46,13 @@ const UI = (() => {
       loadAPIConfigToUI();
       loadSettingsToUI();
     }
+
+    // 启动时自动更新检查通知
+    if (isElectron && window.electronAPI.onUpdateAvailable) {
+      window.electronAPI.onUpdateAvailable((data) => {
+        showUpdateNotification(data.remoteVersion, data.localVersion);
+      });
+    }
   }
 
   // ========== Onboarding ==========
@@ -442,6 +449,55 @@ const UI = (() => {
     bubbleQueue = [];
   }
 
+  // ========== Update Notification ==========
+  function showUpdateNotification(remoteVersion, localVersion) {
+    // 创建更新通知横幅
+    let banner = document.getElementById('update-banner');
+    if (banner) banner.remove();
+
+    banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.innerHTML = `
+      <div class="update-banner-text">
+        <strong>发现新版本 v${remoteVersion}</strong>
+        <span>当前 v${localVersion}</span>
+      </div>
+      <div class="update-banner-actions">
+        <button id="update-banner-btn">立即更新</button>
+        <button id="update-banner-close">✕</button>
+      </div>
+    `;
+    document.body.appendChild(banner);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => banner.classList.add('show'));
+    });
+
+    document.getElementById('update-banner-close').addEventListener('click', () => {
+      banner.classList.remove('show');
+      setTimeout(() => banner.remove(), 300);
+    });
+
+    document.getElementById('update-banner-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('update-banner-btn');
+      btn.textContent = '更新中...';
+      btn.disabled = true;
+      try {
+        const result = await window.electronAPI.doUpdate();
+        if (result.ok) {
+          btn.textContent = '更新完成，请重启';
+          banner.querySelector('.update-banner-text span').textContent = `已更新 ${result.updated} 个文件`;
+        } else {
+          btn.textContent = '更新失败';
+          btn.disabled = false;
+        }
+      } catch (e) {
+        btn.textContent = '更新失败';
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ========== Island Reply (迷你回复框) ==========
   let msgBuffer = [];           // 短消息缓冲
   let msgBufferTimer = null;    // 缓冲计时器
@@ -478,6 +534,7 @@ const UI = (() => {
     // 如果缓冲区里没有待发的消息，结束聊天状态，恢复 Vision
     if (msgBuffer.length === 0) {
       isChatting = false;
+      API.onUserMessage(); // 退出聊天重置冷却
       if (Vision.getStatus().active) {
         Vision.resume();
       }
@@ -544,6 +601,7 @@ const UI = (() => {
 
   function finishChatSession() {
     isChatting = false;
+    API.onUserMessage(); // 退出聊天重置冷却
     if (Vision.getStatus().active) {
       Vision.resume();
     }
@@ -590,6 +648,8 @@ const UI = (() => {
     if (result && result.ok && result.text) {
       const cleanText = result.text.replace(/\[SILENT\]/gi, '').trim();
       if (!cleanText) return;
+      // 截图模式AI发言 → 累加冷却计数
+      API.onAiMessage();
       // 第一条记录到聊天历史
       const firstPart = cleanText.split(/\[NEXT\]/i)[0].trim();
       if (firstPart) addMessageToChat('ai', firstPart);
@@ -1496,9 +1556,8 @@ const UI = (() => {
 
   function addMessageToChat(role, content) {
     Store.addChatMessage({ role, content });
-    // 驱动智能冷却系统
+    // 用户发消息时重置冷却（AI消息的冷却累加只在截图回调里处理）
     if (role === 'user') API.onUserMessage();
-    else if (role === 'ai') API.onAiMessage();
     // 检查是否需要触发记忆总结（后台异步，不阻塞）
     API.checkMemorySummary();
     if (isFullscreen) loadChatHistoryToUI();

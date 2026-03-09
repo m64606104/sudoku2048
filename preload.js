@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   doUpdate: () => ipcRenderer.invoke('do-update'),
 
+  // 启动时自动更新通知
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (event, data) => callback(data)),
+
   // 判断是否在 Electron 环境
   isElectron: true
 });
