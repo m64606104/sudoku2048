@@ -195,6 +195,18 @@ const UI = (() => {
       enterPhoneMode();
     });
 
+    // Minimize window
+    document.getElementById('btn-minimize').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.electronAPI) window.electronAPI.minimizeWindow();
+    });
+
+    // Close app
+    document.getElementById('btn-close-app').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.electronAPI) window.electronAPI.quitApp();
+    });
+
     // Mini reply send
     document.getElementById('island-reply-send').addEventListener('click', (e) => {
       e.stopPropagation();

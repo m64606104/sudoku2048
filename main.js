@@ -169,6 +169,11 @@ ipcMain.on('resize-window-exact', (event, { width, height }) => {
   mainWindow.setSize(width, height, true);
 });
 
+// ========== 窗口最小化 IPC ==========
+ipcMain.on('minimize-window', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
 // ========== 退出应用 IPC ==========
 ipcMain.on('quit-app', () => {
   app.isQuitting = true;

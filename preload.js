@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 精确调整窗口大小（像素）
   resizeWindowExact: (width, height) => ipcRenderer.send('resize-window-exact', { width, height }),
 
+  // 最小化窗口
+  minimizeWindow: () => ipcRenderer.send('minimize-window'),
+
   // 退出应用
   quitApp: () => ipcRenderer.send('quit-app'),
 

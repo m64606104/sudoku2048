@@ -421,6 +421,25 @@ body.electron-mode #dynamic-island {
   transform: scale(0.9);
 }
 
+.island-ctrl-btn {
+  width: 28px;
+  height: 28px;
+  opacity: 0.5;
+  margin-left: 2px;
+}
+.island-ctrl-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.island-ctrl-btn:hover {
+  opacity: 1;
+}
+.island-close-btn:hover {
+  background: rgba(255, 60, 60, 0.25);
+  color: #ff6b6b;
+  border-color: rgba(255, 60, 60, 0.3);
+}
+
 /* Multi-Bubble Container */
 #bubble-container {
   position: fixed;
