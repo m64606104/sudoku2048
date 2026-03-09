@@ -168,15 +168,8 @@
 
   </div>
 
-  <!-- Bubble and Reply moved outside island so they won't be clipped -->
-  <div id="island-bubble" class="hidden">
-    <span id="bubble-text"></span>
-    <button id="bubble-reply-btn" aria-label="Reply">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-      </svg>
-    </button>
-  </div>
+  <!-- Bubble stack container -->
+  <div id="bubble-stack"></div>
 
   <div id="island-reply" class="hidden">
     <input type="text" id="island-reply-input" placeholder="Say something..." autocomplete="off">
@@ -807,6 +800,17 @@
               文字表情
             </button>
             <input type="file" id="phone-cs-file" accept="image/*" hidden>
+          </div>
+        </div>
+
+        <!-- Memory management -->
+        <div class="phone-settings-section">
+          <div class="phone-settings-section-title">
+            <span id="phone-cs-memory-char-name">--</span> 的记忆
+            <span id="phone-cs-memory-count" style="font-size:11px;color:var(--text-muted);margin-left:6px;"></span>
+          </div>
+          <div class="phone-cs-memory-list" id="phone-cs-memory-list">
+            <!-- Rendered by JS -->
           </div>
         </div>
       </div>

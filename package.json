@@ -38,7 +38,8 @@
   },
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "level": "^10.0.0"
   },
   "dependencies": {
     "async-exit-hook": "^2.0.1"

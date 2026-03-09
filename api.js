@@ -13,9 +13,63 @@
 const API = (() => {
   let isRequesting = false;
   let lastCommentTime = 0;               // 上次自动评论的时间戳
-  const COOLDOWN_MS = 60 * 1000;          // 自动评论冷却：60 秒
   const frameSummaries = [];              // 最近帧的摘要文字
   const MAX_FRAME_SUMMARIES = 5;          // 保留几帧摘要
+
+  // ========== 智能冷却系统 ==========
+  // 阶段: normal → slowing → resting → sleeping
+  // normal:   正常频率（基础冷却60秒）
+  // slowing:  用户无回复，间隔拉长到10-15分钟
+  // resting:  继续无回复，间隔1-2小时
+  // sleeping: 休眠，随机2-4小时触发一次
+  let cooldownPhase = 'normal';
+  let aiConsecutiveCount = 0;            // AI连续发言次数（用户无回复）
+  let lastUserMsgTime = Date.now();      // 用户上次说话的时间
+
+  const COOLDOWN_NORMAL = 60 * 1000;                 // 60秒
+  const COOLDOWN_SLOWING = 10 * 60 * 1000;           // 10分钟
+  const COOLDOWN_RESTING = 60 * 60 * 1000;           // 1小时
+  const COOLDOWN_SLEEPING_MIN = 2 * 60 * 60 * 1000;  // 2小时
+  const COOLDOWN_SLEEPING_MAX = 4 * 60 * 60 * 1000;  // 4小时
+
+  // AI连续几条进入下一阶段
+  const THRESHOLD_TO_SLOWING = 5;    // 连续5条无回复 → slowing
+  const THRESHOLD_TO_RESTING = 10;   // 连续10条无回复 → resting
+  const THRESHOLD_TO_SLEEPING = 15;  // 连续15条无回复 → sleeping
+
+  function getCooldownMs() {
+    if (cooldownPhase === 'sleeping') {
+      return COOLDOWN_SLEEPING_MIN + Math.random() * (COOLDOWN_SLEEPING_MAX - COOLDOWN_SLEEPING_MIN);
+    }
+    if (cooldownPhase === 'resting') return COOLDOWN_RESTING + Math.random() * COOLDOWN_RESTING * 0.5;
+    if (cooldownPhase === 'slowing') return COOLDOWN_SLOWING + Math.random() * 5 * 60 * 1000;
+    return COOLDOWN_NORMAL;
+  }
+
+  function updateCooldownPhase() {
+    if (aiConsecutiveCount >= THRESHOLD_TO_SLEEPING) {
+      cooldownPhase = 'sleeping';
+    } else if (aiConsecutiveCount >= THRESHOLD_TO_RESTING) {
+      cooldownPhase = 'resting';
+    } else if (aiConsecutiveCount >= THRESHOLD_TO_SLOWING) {
+      cooldownPhase = 'slowing';
+    } else {
+      cooldownPhase = 'normal';
+    }
+  }
+
+  // 用户发了消息 → 重置冷却
+  function onUserMessage() {
+    aiConsecutiveCount = 0;
+    cooldownPhase = 'normal';
+    lastUserMsgTime = Date.now();
+  }
+
+  // AI发了消息 → 累加计数
+  function onAiMessage() {
+    aiConsecutiveCount++;
+    updateCooldownPhase();
+  }
 
   // ========== URL 格式兼容 ==========
   function normalizeBaseURL(raw) {
@@ -43,6 +97,14 @@ const API = (() => {
       parts.push(`性格特征：${character.personality}`);
     }
 
+    // ---- 长期记忆 ----
+    const memories = Store.getMemories();
+    if (memories.length > 0) {
+      const sorted = [...memories].sort((a, b) => b.importance - a.importance);
+      const memLines = sorted.map(m => `- [重要性${m.importance}] ${m.content}`);
+      parts.push(`\n【你的记忆】\n以下是你记住的关于用户和你们之间的重要事情（按重要性排序）。\n请自然地利用这些记忆来聊天，但不要刻意提起，像真人一样自然地记得这些事。\n${memLines.join('\n')}`);
+    }
+
     // ---- 用户身份 ----
     const userProfile = Store.getUserProfile();
     if (userProfile.nickname || userProfile.identity) {
@@ -57,6 +119,21 @@ const API = (() => {
     parts.push('');
 
     // ---- 软件能力共识 ----
+    // 时间感知
+    const now = new Date();
+    const timeStr = now.toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', hour: '2-digit', minute: '2-digit' });
+    const hour = now.getHours();
+    let timeHint = '';
+    if (hour >= 0 && hour < 6) timeHint = '深夜/凌晨';
+    else if (hour < 9) timeHint = '早上';
+    else if (hour < 12) timeHint = '上午';
+    else if (hour < 14) timeHint = '中午';
+    else if (hour < 18) timeHint = '下午';
+    else if (hour < 22) timeHint = '晚上';
+    else timeHint = '深夜';
+
+    parts.push(`【当前时间】${timeStr}（${timeHint}）\n你对时间有感知。可以根据时间自然地聊天，比如凌晨可以关心对方怎么还没睡，中午可以聊吃了什么，但不要每次都提时间。`);
+
     parts.push(
 `【你们正在使用的聊天软件的能力】
 你和用户正在通过一个特殊的聊天软件对话。这个软件有一个"屏幕共享"功能——用户可以把自己的电脑屏幕分享给你看，你也能看到。
@@ -126,6 +203,12 @@ const API = (() => {
 - 如果没什么好说的，就回复：[SILENT]
 - 不要每次都评论。大部分时候你应该回复 [SILENT]，只有真的有感触的时候才说话。
 
+✨ 你不是只能聊屏幕内容！
+- 你可以聊屏幕上的东西，也可以自由发散聊你自己想聊的事。
+- 比如基于你的人设、当前的时间、之前聊过的话题，自然地开启新话题。
+- 比如凌晨了可以关心对方怎么还没睡，下午可以聊聊今天过得怎么样，晚上可以聊聊吃了什么。
+- 屏幕内容没什么可聊的时候，不要硬聊屏幕，换个话题或者直接 [SILENT]。
+
 ⚠️ 重要 - 关于重复：
 - 仔细看上面的聊天记录和你之前的观察记录。你已经说过的话题、已经聊过的内容，绝对不要再提。
 - 如果屏幕内容跟之前差不多，直接 [SILENT]，不要换个说法重复同样的评论。
@@ -184,7 +267,7 @@ const API = (() => {
 
   // ========== 冷却检查 ==========
   function isInCooldown() {
-    return (Date.now() - lastCommentTime) < COOLDOWN_MS;
+    return (Date.now() - lastCommentTime) < getCooldownMs();
   }
 
   // ========== 视觉截图 → AI 评论 ==========
@@ -490,6 +573,104 @@ ${stickerLines.join('\n')}
     }
   }
 
+  // ========== 记忆总结 ==========
+  const MEMORY_SUMMARY_INTERVAL = 50; // 每50条对话触发一次记忆总结
+  let isSummarizing = false;
+
+  async function summarizeMemories() {
+    if (isSummarizing) return;
+    const config = Store.getAPIConfig();
+    if (!config.apiKey || !config.baseURL || !config.modelName) return;
+
+    const character = Store.getActiveCharacter();
+    if (!character) return;
+
+    const history = Store.getChatHistory();
+    if (history.length < 20) return; // 至少20条才总结
+
+    isSummarizing = true;
+    try {
+      const baseURL = normalizeBaseURL(config.baseURL);
+      // 取最近100条消息用于总结
+      const recent = history.slice(-100);
+      const chatLog = recent.map(m => `${m.role === 'ai' ? character.name : '用户'}: ${m.content}`).join('\n');
+
+      const existingMemories = Store.getMemories();
+      const existingText = existingMemories.length > 0
+        ? '\n已有的记忆：\n' + existingMemories.map(m => `- [重要性${m.importance}] ${m.content}`).join('\n')
+        : '';
+
+      const prompt = `你是一个记忆提取助手。请从以下聊天记录中提取重要的信息，生成记忆条目。
+${existingText}
+
+聊天记录：
+${chatLog}
+
+请提取新的、有价值的记忆（不要重复已有记忆的内容）。每条记忆包含：
+- content: 简洁的一句话描述（不超过50字）
+- importance: 重要性1-5（5最重要）
+
+重要的信息包括：用户的喜好、习惯、重要事件、感情状态、工作/学习情况、约定、承诺等。
+不要记录日常闲聊和无意义的对话。
+
+请严格按以下JSON格式返回（只返回JSON数组，不要其他文字）：
+[{"content": "...", "importance": 3}, ...]
+如果没有值得记住的新信息，返回空数组 []`;
+
+      const res = await fetch(`${baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.modelName,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 500,
+          temperature: 0.3
+        })
+      });
+
+      if (!res.ok) return;
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (!text) return;
+
+      // 解析JSON
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return;
+
+      const newMemories = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(newMemories)) return;
+
+      for (const mem of newMemories) {
+        if (mem.content && typeof mem.content === 'string' && mem.content.length > 0) {
+          Store.addMemory({
+            content: mem.content.substring(0, 100),
+            importance: Math.min(5, Math.max(1, parseInt(mem.importance) || 3))
+          });
+        }
+      }
+
+      // 更新已总结的消息计数
+      Store.setMemorySummaryCount(history.length);
+      console.log(`[Memory] Summarized ${newMemories.length} new memories`);
+    } catch (err) {
+      console.error('summarizeMemories failed:', err);
+    } finally {
+      isSummarizing = false;
+    }
+  }
+
+  // 检查是否需要触发记忆总结
+  function checkMemorySummary() {
+    const history = Store.getChatHistory();
+    const lastCount = Store.getMemorySummaryCount();
+    if (history.length - lastCount >= MEMORY_SUMMARY_INTERVAL) {
+      summarizeMemories();
+    }
+  }
+
   // ========== 状态查询 ==========
   function isBusy() {
     return isRequesting;
@@ -508,6 +689,11 @@ ${stickerLines.join('\n')}
     chooseStickerForReply,
     fetchModels,
     isBusy,
-    isConfigured
+    isConfigured,
+    onUserMessage,
+    onAiMessage,
+    getCooldownPhase: () => cooldownPhase,
+    summarizeMemories,
+    checkMemorySummary
   };
 })();

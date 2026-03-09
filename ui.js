@@ -195,12 +195,6 @@ const UI = (() => {
       enterPhoneMode();
     });
 
-    // Bubble reply button
-    document.getElementById('bubble-reply-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      openIslandReply();
-    });
-
     // Mini reply send
     document.getElementById('island-reply-send').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -326,23 +320,20 @@ const UI = (() => {
     if (isExpanded) toggleIslandExpand();
   }
 
-  // ========== Bubble (支持 [NEXT] 拆条) ==========
-  let bubbleTimer = null;
+  // ========== Bubble Stack (最多3个气泡堆叠) ==========
+  const MAX_BUBBLES = 3;
+  let activeBubbles = [];     // { el, timer }
   let bubbleQueue = [];       // 拆条队列
   let bubbleQueueTimer = null;
-  let isChatting = false;     // 用户在聊天交互中（包括回复输入框打开、等待 AI 回复）
+  let isChatting = false;
 
   function showBubble(text) {
-    // 处理 [NEXT] 拆条
     const parts = text.split(/\[NEXT\]/i).map(s => s.trim()).filter(Boolean);
 
     if (parts.length <= 1) {
-      showSingleBubble(parts[0] || text);
+      pushBubble(parts[0] || text);
     } else {
-      // 逐条显示，间隔 1~2 秒模拟打字节奏
-      showSingleBubble(parts[0]);
-      // 同时把第一条以外的都记录到聊天
-      // 第一条已经在调用处记录了，后续条在这里记录
+      pushBubble(parts[0]);
       bubbleQueue = parts.slice(1);
       scheduleBubbleQueue();
     }
@@ -352,42 +343,76 @@ const UI = (() => {
     if (bubbleQueueTimer) clearTimeout(bubbleQueueTimer);
     if (bubbleQueue.length === 0) return;
 
-    const delay = 1000 + Math.random() * 1000; // 1~2 秒
+    const delay = 1500 + Math.random() * 1500; // 1.5~3 秒，让用户有时间看
     bubbleQueueTimer = setTimeout(() => {
       const next = bubbleQueue.shift();
       if (next) {
-        showSingleBubble(next);
+        pushBubble(next);
         addMessageToChat('ai', next);
         scheduleBubbleQueue();
       }
     }, delay);
   }
 
-  function showSingleBubble(text) {
-    const bubble = document.getElementById('island-bubble');
-    const bubbleText = document.getElementById('bubble-text');
-    bubbleText.textContent = text;
+  function pushBubble(text) {
+    const stack = document.getElementById('bubble-stack');
 
-    // Position bubble below the island
+    // Position stack below the island
     const island = document.getElementById('dynamic-island');
     if (island) {
       const rect = island.getBoundingClientRect();
-      bubble.style.top = (rect.bottom + 10) + 'px';
-      bubble.style.left = (rect.left + rect.width / 2) + 'px';
+      stack.style.top = (rect.bottom + 10) + 'px';
+      stack.style.left = (rect.left + rect.width / 2) + 'px';
     }
 
-    bubble.classList.remove('hidden');
-    bubble.classList.add('show');
+    // If already at max, remove the oldest
+    if (activeBubbles.length >= MAX_BUBBLES) {
+      removeBubble(activeBubbles[0]);
+    }
 
-    if (bubbleTimer) clearTimeout(bubbleTimer);
+    // Create bubble element
+    const el = document.createElement('div');
+    el.className = 'bubble-item';
+    el.innerHTML = `
+      <span class="bubble-text">${escapeHtml(text)}</span>
+      <button class="bubble-reply-btn" aria-label="Reply">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+        </svg>
+      </button>
+    `;
 
+    // Reply button click
+    el.querySelector('.bubble-reply-btn').addEventListener('click', () => {
+      openIslandReply();
+    });
+
+    stack.appendChild(el);
+
+    // Trigger show animation
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => el.classList.add('show'));
+    });
+
+    // Auto-dismiss timer
     const dur = (Store.getSettings().bubbleDuration || 8) * 1000;
-    bubbleTimer = setTimeout(() => {
-      if (!isChatting && bubbleQueue.length === 0) {
-        bubble.classList.remove('show');
-        setTimeout(() => bubble.classList.add('hidden'), 300);
-      }
+    const timer = setTimeout(() => {
+      removeBubble(entry);
     }, dur);
+
+    const entry = { el, timer };
+    activeBubbles.push(entry);
+  }
+
+  function removeBubble(entry) {
+    if (!entry || !entry.el) return;
+    clearTimeout(entry.timer);
+    entry.el.classList.remove('show');
+    entry.el.classList.add('fade-out');
+    setTimeout(() => {
+      if (entry.el.parentNode) entry.el.parentNode.removeChild(entry.el);
+    }, 300);
+    activeBubbles = activeBubbles.filter(b => b !== entry);
   }
 
   // System toast: simple status message (not a chat bubble)
@@ -408,10 +433,11 @@ const UI = (() => {
   }
 
   function hideBubble() {
-    const bubble = document.getElementById('island-bubble');
-    bubble.classList.remove('show');
-    setTimeout(() => bubble.classList.add('hidden'), 300);
-    if (bubbleTimer) { clearTimeout(bubbleTimer); bubbleTimer = null; }
+    activeBubbles.forEach(b => {
+      clearTimeout(b.timer);
+      if (b.el.parentNode) b.el.parentNode.removeChild(b.el);
+    });
+    activeBubbles = [];
     if (bubbleQueueTimer) { clearTimeout(bubbleQueueTimer); bubbleQueueTimer = null; }
     bubbleQueue = [];
   }
@@ -1470,6 +1496,11 @@ const UI = (() => {
 
   function addMessageToChat(role, content) {
     Store.addChatMessage({ role, content });
+    // 驱动智能冷却系统
+    if (role === 'user') API.onUserMessage();
+    else if (role === 'ai') API.onAiMessage();
+    // 检查是否需要触发记忆总结（后台异步，不阻塞）
+    API.checkMemorySummary();
     if (isFullscreen) loadChatHistoryToUI();
     if (isPhoneMode && phoneCharId === Store.getActiveCharacterId()) {
       loadPhoneChatMessages();
@@ -2235,6 +2266,7 @@ const UI = (() => {
         pill.classList.add('active');
         document.getElementById('phone-cs-char-name').textContent = c.nickname || c.name;
         renderCsStickerList();
+        renderCsMemoryList();
       });
       container.appendChild(pill);
     });
@@ -2242,6 +2274,7 @@ const UI = (() => {
     const activeChar = chars.find(c => c.id === csSelectedCharId);
     document.getElementById('phone-cs-char-name').textContent = activeChar ? (activeChar.nickname || activeChar.name) : '--';
     renderCsStickerList();
+    renderCsMemoryList();
 
     document.getElementById('phone-chat-settings').classList.remove('hidden');
   }
@@ -2275,6 +2308,86 @@ const UI = (() => {
         Store.deleteSticker(s.id, csSelectedCharId);
         renderCsStickerList();
       });
+      container.appendChild(item);
+    });
+  }
+
+  function renderCsMemoryList() {
+    const container = document.getElementById('phone-cs-memory-list');
+    const nameEl = document.getElementById('phone-cs-memory-char-name');
+    const countEl = document.getElementById('phone-cs-memory-count');
+    if (!csSelectedCharId) {
+      container.innerHTML = '';
+      nameEl.textContent = '--';
+      countEl.textContent = '';
+      return;
+    }
+
+    const char = Store.getCharacters().find(c => c.id === csSelectedCharId);
+    nameEl.textContent = char ? (char.nickname || char.name) : '--';
+
+    const memories = Store.getMemories(csSelectedCharId);
+    countEl.textContent = `(${memories.length}/30)`;
+    container.innerHTML = '';
+
+    if (memories.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">暂无记忆。聊天达到一定条数后 AI 会自动生成记忆。</div>';
+      return;
+    }
+
+    // 按重要性排序
+    const sorted = [...memories].sort((a, b) => b.importance - a.importance || b.timestamp - a.timestamp);
+
+    sorted.forEach(m => {
+      const impClass = m.importance >= 4 ? 'high' : m.importance >= 2 ? 'mid' : 'low';
+      const timeStr = new Date(m.timestamp).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      const item = document.createElement('div');
+      item.className = 'memory-item';
+      item.innerHTML = `
+        <div class="memory-item-header">
+          <span class="memory-item-importance ${impClass}">重要性 ${m.importance}</span>
+          <span class="memory-item-time">${timeStr}</span>
+          <div class="memory-item-actions">
+            <button class="edit-btn" title="编辑">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button class="delete-btn" title="删除">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="memory-item-content">${escapeHtml(m.content)}</div>
+      `;
+
+      // 编辑
+      item.querySelector('.edit-btn').addEventListener('click', () => {
+        const contentEl = item.querySelector('.memory-item-content');
+        const currentText = m.content;
+        contentEl.innerHTML = `<textarea class="memory-edit-input" rows="2">${escapeHtml(currentText)}</textarea>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button class="btn-sm btn-primary" style="padding:3px 10px;font-size:11px;" data-action="save">保存</button>
+            <button class="btn-sm btn-secondary" style="padding:3px 10px;font-size:11px;" data-action="cancel">取消</button>
+          </div>`;
+        const textarea = contentEl.querySelector('textarea');
+        textarea.focus();
+        contentEl.querySelector('[data-action="save"]').addEventListener('click', () => {
+          const newText = textarea.value.trim();
+          if (newText) {
+            Store.updateMemory(m.id, { content: newText }, csSelectedCharId);
+          }
+          renderCsMemoryList();
+        });
+        contentEl.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+          renderCsMemoryList();
+        });
+      });
+
+      // 删除
+      item.querySelector('.delete-btn').addEventListener('click', () => {
+        Store.deleteMemory(m.id, csSelectedCharId);
+        renderCsMemoryList();
+      });
+
       container.appendChild(item);
     });
   }

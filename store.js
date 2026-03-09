@@ -165,6 +165,68 @@ const Store = (() => {
     save('chat_' + id, []);
   }
 
+  // ========== 记忆系统 ==========
+  const MAX_MEMORIES = 30;
+
+  function getMemories(characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return [];
+    return load('memories_' + id) || [];
+  }
+
+  function saveMemories(memories, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    save('memories_' + id, memories);
+  }
+
+  function addMemory(memory, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    const list = getMemories(id);
+    list.push({
+      id: generateId(),
+      content: memory.content || '',
+      importance: memory.importance || 3,
+      timestamp: Date.now()
+    });
+    // 超过上限时淘汰最低重要性的
+    if (list.length > MAX_MEMORIES) {
+      list.sort((a, b) => b.importance - a.importance || b.timestamp - a.timestamp);
+      list.splice(MAX_MEMORIES);
+    }
+    saveMemories(list, id);
+  }
+
+  function updateMemory(memoryId, updates, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    const list = getMemories(id);
+    const idx = list.findIndex(m => m.id === memoryId);
+    if (idx === -1) return;
+    Object.assign(list[idx], updates);
+    saveMemories(list, id);
+  }
+
+  function deleteMemory(memoryId, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    const list = getMemories(id).filter(m => m.id !== memoryId);
+    saveMemories(list, id);
+  }
+
+  function getMemorySummaryCount(characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return 0;
+    return load('memory_summary_count_' + id) || 0;
+  }
+
+  function setMemorySummaryCount(count, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    save('memory_summary_count_' + id, count);
+  }
+
   // ========== 行为记录 ==========
   function getBehaviorLog() {
     return load('behavior_log') || [];
@@ -330,6 +392,8 @@ const Store = (() => {
     getCharacters, addCharacter, updateCharacter, deleteCharacter,
     getActiveCharacterId, setActiveCharacterId, getActiveCharacter,
     getChatHistory, addChatMessage, clearChatHistory,
+    getMemories, saveMemories, addMemory, updateMemory, deleteMemory,
+    getMemorySummaryCount, setMemorySummaryCount,
     getBehaviorLog, addBehavior,
     getStickers, addSticker, deleteSticker,
     getUserProfile, saveUserProfile,
