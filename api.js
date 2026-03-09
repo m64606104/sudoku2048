@@ -16,59 +16,82 @@ const API = (() => {
   const frameSummaries = [];              // 最近帧的摘要文字
   const MAX_FRAME_SUMMARIES = 5;          // 保留几帧摘要
 
-  // ========== 智能冷却系统 ==========
-  // 阶段: normal → slowing → resting → sleeping
-  // normal:   正常频率（基础冷却60秒）
-  // slowing:  用户无回复，间隔拉长到10-15分钟
-  // resting:  继续无回复，间隔1-2小时
-  // sleeping: 休眠，随机2-4小时触发一次
-  let cooldownPhase = 'normal';
-  let aiConsecutiveCount = 0;            // AI连续发言次数（用户无回复）
-  let lastUserMsgTime = Date.now();      // 用户上次说话的时间
+  // ========== 智能冷却系统（基于轮次） ==========
+  // 一"轮"= 一次 commentOnScreen 成功发言（不管 [NEXT] 拆了几条）
+  //
+  // 阶段一（活跃期）：每 5-10 分钟截图一轮，共随机 3 或 4 轮
+  // 阶段二（降速期）：每 5-10 分钟截图一轮，共随机 1 或 2 轮
+  // 阶段三（休眠期）：每 2-5 小时截图一轮，无限循环
+  //
+  // 用户任何回复（气泡回复 or 聊天框回复）→ 立刻重置回阶段一
+  // 退出聊天模式 → 也重置回阶段一
+  // 刚进入截图模式 / 刚重置后，第一轮不额外冷却，按正常 captureInterval 截图
 
-  const COOLDOWN_NORMAL = 60 * 1000;                 // 60秒
-  const COOLDOWN_SLOWING = 10 * 60 * 1000;           // 10分钟
-  const COOLDOWN_RESTING = 60 * 60 * 1000;           // 1小时
-  const COOLDOWN_SLEEPING_MIN = 2 * 60 * 60 * 1000;  // 2小时
-  const COOLDOWN_SLEEPING_MAX = 4 * 60 * 60 * 1000;  // 4小时
+  let cooldownPhase = 'initial';  // initial | active | slowdown | sleeping
+  let roundCount = 0;              // 当前阶段已完成的轮次
+  let phaseMaxRounds = 0;          // 当前阶段的最大轮次
+  let lastUserMsgTime = Date.now();
 
-  // AI连续几条进入下一阶段
-  const THRESHOLD_TO_SLOWING = 5;    // 连续5条无回复 → slowing
-  const THRESHOLD_TO_RESTING = 10;   // 连续10条无回复 → resting
-  const THRESHOLD_TO_SLEEPING = 15;  // 连续15条无回复 → sleeping
+  // 间隔常量
+  const ACTIVE_INTERVAL_MIN = 5 * 60 * 1000;    // 5分钟
+  const ACTIVE_INTERVAL_MAX = 10 * 60 * 1000;   // 10分钟
+  const SLEEP_INTERVAL_MIN = 2 * 60 * 60 * 1000; // 2小时
+  const SLEEP_INTERVAL_MAX = 5 * 60 * 60 * 1000; // 5小时
+
+  function randBetween(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  function initPhase(phase) {
+    cooldownPhase = phase;
+    roundCount = 0;
+    if (phase === 'active') {
+      phaseMaxRounds = Math.random() < 0.5 ? 3 : 4;  // 随机3或4轮
+    } else if (phase === 'slowdown') {
+      phaseMaxRounds = Math.random() < 0.5 ? 1 : 2;  // 随机1或2轮
+    } else {
+      phaseMaxRounds = Infinity; // 休眠无限循环
+    }
+  }
 
   function getCooldownMs() {
-    if (cooldownPhase === 'sleeping') {
-      return COOLDOWN_SLEEPING_MIN + Math.random() * (COOLDOWN_SLEEPING_MAX - COOLDOWN_SLEEPING_MIN);
+    // initial: 刚重置，不额外冷却，让正常 captureInterval 决定
+    if (cooldownPhase === 'initial') return 0;
+    // active / slowdown: 5-10分钟随机
+    if (cooldownPhase === 'active' || cooldownPhase === 'slowdown') {
+      return randBetween(ACTIVE_INTERVAL_MIN, ACTIVE_INTERVAL_MAX);
     }
-    if (cooldownPhase === 'resting') return COOLDOWN_RESTING + Math.random() * COOLDOWN_RESTING * 0.5;
-    if (cooldownPhase === 'slowing') return COOLDOWN_SLOWING + Math.random() * 5 * 60 * 1000;
-    return COOLDOWN_NORMAL;
+    // sleeping: 2-5小时随机
+    return randBetween(SLEEP_INTERVAL_MIN, SLEEP_INTERVAL_MAX);
   }
 
-  function updateCooldownPhase() {
-    if (aiConsecutiveCount >= THRESHOLD_TO_SLEEPING) {
-      cooldownPhase = 'sleeping';
-    } else if (aiConsecutiveCount >= THRESHOLD_TO_RESTING) {
-      cooldownPhase = 'resting';
-    } else if (aiConsecutiveCount >= THRESHOLD_TO_SLOWING) {
-      cooldownPhase = 'slowing';
-    } else {
-      cooldownPhase = 'normal';
-    }
-  }
-
-  // 用户发了消息 → 重置冷却
+  // 用户发了消息（任何方式）→ 重置冷却到初始状态
   function onUserMessage() {
-    aiConsecutiveCount = 0;
-    cooldownPhase = 'normal';
+    cooldownPhase = 'initial';
+    roundCount = 0;
+    phaseMaxRounds = 0;
     lastUserMsgTime = Date.now();
+    lastCommentTime = 0; // 清除冷却，允许立刻截图
   }
 
-  // AI发了消息 → 累加计数
+  // AI截图模式发了一轮 → 推进阶段
   function onAiMessage() {
-    aiConsecutiveCount++;
-    updateCooldownPhase();
+    // 第一轮发言：从 initial 进入 active
+    if (cooldownPhase === 'initial') {
+      initPhase('active');
+      roundCount = 1;
+      return;
+    }
+
+    roundCount++;
+
+    // 检查是否需要进入下一阶段
+    if (cooldownPhase === 'active' && roundCount >= phaseMaxRounds) {
+      initPhase('slowdown');
+    } else if (cooldownPhase === 'slowdown' && roundCount >= phaseMaxRounds) {
+      initPhase('sleeping');
+    }
+    // sleeping 阶段永远循环，不进入下一阶段
   }
 
   // ========== URL 格式兼容 ==========
