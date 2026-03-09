@@ -1472,6 +1472,7 @@ const UI = (() => {
     history.forEach(msg => {
       const div = document.createElement('div');
       div.className = `chat-msg ${msg.role}`;
+      if (msg.id) div.dataset.msgId = msg.id;
 
       // Image sticker: [sticker:base64...]
       if (msg.content && msg.content.startsWith('[sticker:')) {
@@ -1481,6 +1482,7 @@ const UI = (() => {
             <div class="chat-msg-sticker"><img src="${stickerImg}" alt="sticker"></div>
             <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>
           `;
+          if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'fullscreen'));
           container.appendChild(div);
           return;
         }
@@ -1494,6 +1496,7 @@ const UI = (() => {
             <div class="chat-msg-text-sticker">${escapeHtml(textContent)}</div>
             <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>
           `;
+          if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'fullscreen'));
           container.appendChild(div);
           return;
         }
@@ -1503,6 +1506,7 @@ const UI = (() => {
         <div class="chat-msg-content">${escapeHtml(msg.content)}</div>
         <div class="chat-msg-time">${formatTime(msg.timestamp)}</div>
       `;
+      if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'fullscreen'));
       container.appendChild(div);
     });
     container.scrollTop = container.scrollHeight;
@@ -1519,6 +1523,99 @@ const UI = (() => {
     }
     // 触发记忆总结检查（每 20 条消息自动总结一次）
     API.checkMemoryTrigger();
+  }
+
+  // ========== Message Action Menu (Edit / Delete) ==========
+  let activeMsgActionMenu = null;
+
+  function dismissMsgActions() {
+    if (activeMsgActionMenu) {
+      activeMsgActionMenu.remove();
+      activeMsgActionMenu = null;
+    }
+  }
+
+  function showMsgActions(msg, mode) {
+    dismissMsgActions();
+
+    const isSticker = msg.content.startsWith('[sticker:') || msg.content.startsWith('[textsticker:') || msg.content.startsWith('[image:');
+
+    const menu = document.createElement('div');
+    menu.className = 'msg-action-menu';
+    menu.innerHTML = `
+      ${!isSticker ? '<button class="msg-action-edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> 编辑</button>' : ''}
+      <button class="msg-action-delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除</button>
+    `;
+
+    // Edit handler
+    if (!isSticker) {
+      menu.querySelector('.msg-action-edit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        dismissMsgActions();
+        showMsgEditDialog(msg, mode);
+      });
+    }
+
+    // Delete handler
+    menu.querySelector('.msg-action-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissMsgActions();
+      if (mode === 'phone') {
+        Store.deleteChatMessage(msg.id, phoneCharId);
+        loadPhoneChatMessages();
+      } else {
+        Store.deleteChatMessage(msg.id);
+        loadChatHistoryToUI();
+      }
+    });
+
+    document.body.appendChild(menu);
+    activeMsgActionMenu = menu;
+
+    // Dismiss on click outside
+    setTimeout(() => {
+      const dismiss = (e) => {
+        if (!menu.contains(e.target)) {
+          dismissMsgActions();
+          document.removeEventListener('click', dismiss, true);
+        }
+      };
+      document.addEventListener('click', dismiss, true);
+    }, 10);
+  }
+
+  function showMsgEditDialog(msg, mode) {
+    const overlay = document.createElement('div');
+    overlay.className = 'msg-edit-overlay';
+    overlay.innerHTML = `
+      <div class="msg-edit-dialog">
+        <div class="msg-edit-title">编辑消息</div>
+        <textarea class="msg-edit-textarea">${escapeHtml(msg.content)}</textarea>
+        <div class="msg-edit-actions">
+          <button class="msg-edit-cancel">取消</button>
+          <button class="msg-edit-save">保存</button>
+        </div>
+      </div>
+    `;
+
+    overlay.querySelector('.msg-edit-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    overlay.querySelector('.msg-edit-save').addEventListener('click', () => {
+      const newContent = overlay.querySelector('.msg-edit-textarea').value.trim();
+      if (!newContent) return;
+      if (mode === 'phone') {
+        Store.updateChatMessage(msg.id, newContent, phoneCharId);
+        loadPhoneChatMessages();
+      } else {
+        Store.updateChatMessage(msg.id, newContent);
+        loadChatHistoryToUI();
+      }
+      overlay.remove();
+    });
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('.msg-edit-textarea').focus();
   }
 
   // ========== Utils ==========
@@ -1980,12 +2077,14 @@ const UI = (() => {
 
       const div = document.createElement('div');
       div.className = `phone-msg ${msg.role}`;
+      if (msg.id) div.dataset.msgId = msg.id;
 
       // Image sticker: [sticker:base64...]
       if (msg.content && msg.content.startsWith('[sticker:')) {
         const stickerImg = msg.content.match(/\[sticker:(.*?)\]/)?.[1];
         if (stickerImg) {
           div.innerHTML = avatarHtml(char) + `<div class="phone-msg-sticker"><img src="${stickerImg}" alt="sticker"></div>`;
+          if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'phone'));
           container.appendChild(div);
           return;
         }
@@ -1996,6 +2095,7 @@ const UI = (() => {
         const textContent = msg.content.match(/\[textsticker:(.*?)\]/)?.[1];
         if (textContent) {
           div.innerHTML = avatarHtml(char) + `<div class="phone-msg-text-sticker">${escapeHtml(textContent)}</div>`;
+          if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'phone'));
           container.appendChild(div);
           return;
         }
@@ -2006,12 +2106,14 @@ const UI = (() => {
         const imgSrc = msg.content.match(/\[image:(.*?)\]/)?.[1];
         if (imgSrc) {
           div.innerHTML = avatarHtml(char) + `<div class="phone-msg-image"><img src="${imgSrc}" alt="image"></div>`;
+          if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'phone'));
           container.appendChild(div);
           return;
         }
       }
 
       div.innerHTML = avatarHtml(char) + `<div class="phone-msg-bubble">${escapeHtml(msg.content)}</div>`;
+      if (msg.id) div.addEventListener('click', () => showMsgActions(msg, 'phone'));
       container.appendChild(div);
     });
 

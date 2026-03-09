@@ -151,12 +151,35 @@ const Store = (() => {
     const history = getChatHistory(id);
     history.push({
       ...message,
+      id: generateId(),
       timestamp: Date.now()
     });
     if (history.length > 200) {
       history.splice(0, history.length - 200);
     }
     save('chat_' + id, history);
+  }
+
+  function updateChatMessage(msgId, newContent, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    const history = getChatHistory(id);
+    const msg = history.find(m => m.id === msgId);
+    if (msg) {
+      msg.content = newContent;
+      save('chat_' + id, history);
+    }
+  }
+
+  function deleteChatMessage(msgId, characterId) {
+    const id = characterId || getActiveCharacterId();
+    if (!id) return;
+    const history = getChatHistory(id);
+    const idx = history.findIndex(m => m.id === msgId);
+    if (idx !== -1) {
+      history.splice(idx, 1);
+      save('chat_' + id, history);
+    }
   }
 
   function clearChatHistory(characterId) {
@@ -392,7 +415,7 @@ const Store = (() => {
     getAPIConfig, saveAPIConfig,
     getCharacters, addCharacter, updateCharacter, deleteCharacter,
     getActiveCharacterId, setActiveCharacterId, getActiveCharacter,
-    getChatHistory, addChatMessage, clearChatHistory,
+    getChatHistory, addChatMessage, updateChatMessage, deleteChatMessage, clearChatHistory,
     getMemories, saveMemories, addMemory, updateMemory, deleteMemory,
     getMemoryCounter, setMemoryCounter,
     getBehaviorLog, addBehavior,
