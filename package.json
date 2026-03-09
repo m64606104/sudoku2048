@@ -12,8 +12,8 @@
     "build:all": "electron-builder --mac --win"
   },
   "build": {
-    "appId": "com.sudoku2048.app",
-    "productName": "数独2048",
+    "appId": "com.visionsoul.app",
+    "productName": "Vision Soul",
     "files": [
       "main.js",
       "preload.js",
@@ -22,9 +22,11 @@
       "store.js",
       "vision.js",
       "api.js",
-      "ui.js"
+      "ui.js",
+      "assets/**"
     ],
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.social-networking",
       "target": "dmg"
     },
